@@ -15,11 +15,11 @@ export function RecentOrdersTable({ orders }: RecentOrdersTableProps) {
                     <div className="flex items-center gap-2">
                         <ShoppingCart className="size-4.5 text-blue-500 dark:text-blue-400" />
                         <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
-                            Órdenes Recientes
+                            Facturación Reciente
                         </h2>
                     </div>
                     <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                        Últimos pedidos registrados en el período
+                        Últimos comprobantes emitidos en el período
                     </p>
                 </div>
             </div>
@@ -28,12 +28,12 @@ export function RecentOrdersTable({ orders }: RecentOrdersTableProps) {
                 <table className="w-full text-left text-xs">
                     <thead>
                         <tr className="border-b border-black/[0.06] text-neutral-400 dark:border-white/[0.06]">
-                            <th className="pb-3 font-medium">Pedido</th>
-                            <th className="pb-3 font-medium">Cliente</th>
+                            <th className="pb-3 font-medium">Factura</th>
+                            <th className="pb-3 font-medium">Cliente / Agroservicio</th>
                             <th className="pb-3 font-medium">Fecha</th>
-                            <th className="pb-3 font-medium">Destino</th>
-                            <th className="pb-3 text-right font-medium">Items</th>
-                            <th className="pb-3 text-right font-medium">Total</th>
+                            <th className="pb-3 font-medium">Tipo & Asesor</th>
+                            <th className="pb-3 text-right font-medium">Líneas</th>
+                            <th className="pb-3 text-right font-medium">Total ($)</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">

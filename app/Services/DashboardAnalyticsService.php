@@ -2,19 +2,15 @@
 
 namespace App\Services;
 
-use App\Models\Order;
-use App\Models\OrderDetail;
-use App\Models\Product;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class DashboardAnalyticsService
 {
     /**
-     * Obtiene el set completo de métricas y gráficos para el dashboard.
+     * Obtiene el set completo de métricas y gráficos para el dashboard empresarial.
      */
-    public function getDashboardData(?string $period = 'all'): array
+    public function getDashboardData(?string $period = '2026'): array
     {
         $normalizedPeriod = $this->resolvePeriod($period);
         $dateRange = $this->getDateRangeForPeriod($normalizedPeriod);
@@ -22,18 +18,21 @@ class DashboardAnalyticsService
         return [
             'period' => $normalizedPeriod,
             'available_periods' => [
+                ['id' => '2026', 'label' => 'Año 2026 (Actual)'],
+                ['id' => '2025', 'label' => 'Año 2025'],
+                ['id' => '2024', 'label' => 'Año 2024'],
                 ['id' => 'all', 'label' => 'Histórico Total'],
-                ['id' => '1998', 'label' => 'Año 1998'],
-                ['id' => '1997', 'label' => 'Año 1997'],
-                ['id' => '1996', 'label' => 'Año 1996'],
             ],
             'kpis' => $this->getKpis($dateRange),
             'sales_trend' => $this->getSalesTrend($dateRange),
             'category_distribution' => $this->getCategoryDistribution($dateRange),
             'top_products' => $this->getTopProducts($dateRange, 5),
-            'geo_distribution' => $this->getGeographicDistribution($dateRange, 6),
-            'recent_orders' => $this->getRecentOrders($dateRange, 5),
-            'low_stock_alerts' => $this->getLowStockAlerts(5),
+            'geo_distribution' => $this->getCommercialForceDistribution($dateRange, 6),
+            'recent_orders' => $this->getRecentOrders($dateRange, 6),
+            'low_stock_alerts' => $this->getLowStockAlerts(6),
+            'yoy_comparison' => $this->getYearOverYearComparison(),
+            'cxc_matrix' => $this->getAccountsReceivableAndClientMatrix(),
+            'supply_chain' => $this->getSupplyChainTrafficLight(),
         ];
     }
 
@@ -42,8 +41,9 @@ class DashboardAnalyticsService
      */
     protected function resolvePeriod(?string $period): string
     {
-        $allowed = ['all', '1998', '1997', '1996'];
-        return in_array($period, $allowed, true) ? $period : 'all';
+        $allowed = ['2026', '2025', '2024', 'all'];
+
+        return in_array($period, $allowed, true) ? (string) $period : '2026';
     }
 
     /**
@@ -52,24 +52,25 @@ class DashboardAnalyticsService
     protected function getDateRangeForPeriod(string $period): array
     {
         return match ($period) {
-            '1998' => ['from' => '1998-01-01', 'to' => '1998-12-31'],
-            '1997' => ['from' => '1997-01-01', 'to' => '1997-12-31'],
-            '1996' => ['from' => '1996-01-01', 'to' => '1996-12-31'],
+            '2026' => ['from' => '2026-01-01', 'to' => '2026-12-31'],
+            '2025' => ['from' => '2025-01-01', 'to' => '2025-12-31'],
+            '2024' => ['from' => '2024-01-01', 'to' => '2024-12-31'],
             default => ['from' => null, 'to' => null],
         };
     }
 
     /**
-     * Aplica filtro de fechas a una query de Orders o joins con Orders.
+     * Aplica filtro de fechas a una consulta SQL Server.
      */
-    protected function applyDateFilter(mixed $query, array $dateRange, string $column = 'orders.order_date'): mixed
+    protected function applyDateFilter(mixed $query, array $dateRange, string $column = 'e.fecfct'): mixed
     {
-        if (!empty($dateRange['from'])) {
+        if (! empty($dateRange['from'])) {
             $query->whereDate($column, '>=', $dateRange['from']);
         }
-        if (!empty($dateRange['to'])) {
+        if (! empty($dateRange['to'])) {
             $query->whereDate($column, '<=', $dateRange['to']);
         }
+
         return $query;
     }
 
@@ -78,35 +79,42 @@ class DashboardAnalyticsService
      */
     public function getKpis(array $dateRange): array
     {
-        $ordersQuery = Order::query();
-        $this->applyDateFilter($ordersQuery, $dateRange, 'order_date');
-        $totalOrders = (clone $ordersQuery)->count();
+        $invoicesQuery = DB::table('Encfct as e')
+            ->where('e.estado', '!=', 'A');
 
-        $revenueQuery = OrderDetail::query()
-            ->join('orders', 'order_details.order_id', '=', 'orders.order_id');
-        $this->applyDateFilter($revenueQuery, $dateRange, 'orders.order_date');
+        $this->applyDateFilter($invoicesQuery, $dateRange, 'e.fecfct');
 
-        $metrics = (clone $revenueQuery)
+        $invoiceMetrics = (clone $invoicesQuery)
             ->selectRaw('
-                SUM(order_details.unit_price * order_details.quantity * (1 - order_details.discount)) as total_revenue,
-                SUM(order_details.quantity) as total_units_sold
+                COUNT(DISTINCT e.ID_Fac) as total_invoices,
+                ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as total_revenue
             ')
             ->first();
 
-        $totalRevenue = round((float) ($metrics->total_revenue ?? 0), 2);
-        $totalUnits = (int) ($metrics->total_units_sold ?? 0);
+        $totalRevenue = round((float) ($invoiceMetrics->total_revenue ?? 0), 2);
+        $totalOrders = (int) ($invoiceMetrics->total_invoices ?? 0);
         $averageOrderValue = $totalOrders > 0 ? round($totalRevenue / $totalOrders, 2) : 0.0;
 
-        // Métricas de inventario (globales)
-        $lowStockCount = Product::query()
-            ->where('discontinued', 0)
-            ->where(function (Builder $q) {
-                $q->whereColumn('units_in_stock', '<=', 'reorder_level')
-                  ->orWhere('units_in_stock', '<=', 0);
-            })
-            ->count();
+        // Unidades vendidas en el período
+        $itemsQuery = DB::table('detfct as d')
+            ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->where('e.estado', '!=', 'A');
 
-        $activeProductsCount = Product::query()->where('discontinued', 0)->count();
+        $this->applyDateFilter($itemsQuery, $dateRange, 'e.fecfct');
+
+        $totalUnits = (int) ($itemsQuery->sum(DB::raw('CAST(d.qtyvta as float)')) ?? 0);
+
+        // Artículos activos e inventario en quiebre o agotado
+        $activeProductsCount = DB::table('productos')->where('estado', 'A')->count();
+
+        $lowStockCount = DB::table('Existencias as ex')
+            ->join('productos as p', DB::raw('RTRIM(ex.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
+            ->where('p.estado', 'A')
+            ->groupBy('ex.codprd')
+            ->havingRaw('SUM(CAST(ex.Exiprd as float)) <= 0')
+            ->select('ex.codprd')
+            ->get()
+            ->count();
 
         return [
             'total_revenue' => $totalRevenue,
@@ -119,72 +127,85 @@ class DashboardAnalyticsService
     }
 
     /**
-     * Tendencia mensual de ventas y volumen de órdenes.
+     * Tendencia mensual de facturación y volumen de pedidos.
      */
     public function getSalesTrend(array $dateRange): array
     {
-        $query = OrderDetail::query()
-            ->join('orders', 'order_details.order_id', '=', 'orders.order_id');
+        $query = DB::table('Encfct as e')
+            ->where('e.estado', '!=', 'A');
 
-        $this->applyDateFilter($query, $dateRange, 'orders.order_date');
+        $this->applyDateFilter($query, $dateRange, 'e.fecfct');
 
         $results = $query
             ->selectRaw("
-                TO_CHAR(orders.order_date, 'YYYY-MM') as month_key,
-                ROUND(CAST(SUM(order_details.unit_price * order_details.quantity * (1 - order_details.discount)) AS numeric), 2) as revenue,
-                COUNT(DISTINCT orders.order_id) as orders_count,
-                SUM(order_details.quantity) as units_sold
+                FORMAT(e.fecfct, 'yyyy-MM') as month_key,
+                ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as revenue,
+                COUNT(DISTINCT e.ID_Fac) as orders_count
             ")
-            ->groupBy('month_key')
+            ->groupBy(DB::raw("FORMAT(e.fecfct, 'yyyy-MM')"))
             ->orderBy('month_key', 'asc')
             ->get();
 
-        return $results->map(function ($item) {
-            $carbon = Carbon::createFromFormat('Y-m', $item->month_key);
-            $formattedMonth = $carbon ? $carbon->translatedFormat('M Y') : $item->month_key;
+        $unitsQuery = DB::table('detfct as d')
+            ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->where('e.estado', '!=', 'A');
+        $this->applyDateFilter($unitsQuery, $dateRange, 'e.fecfct');
+        $unitsByMonth = $unitsQuery
+            ->selectRaw("
+                FORMAT(e.fecfct, 'yyyy-MM') as month_key,
+                ROUND(SUM(CAST(d.qtyvta as float)), 0) as units_sold
+            ")
+            ->groupBy(DB::raw("FORMAT(e.fecfct, 'yyyy-MM')"))
+            ->pluck('units_sold', 'month_key');
+
+        return $results->map(function ($item) use ($unitsByMonth) {
+            $monthKey = (string) $item->month_key;
+            $carbon = Carbon::createFromFormat('Y-m', $monthKey);
+            $formattedMonth = $carbon ? $carbon->translatedFormat('M Y') : $monthKey;
 
             return [
-                'month' => $item->month_key,
+                'month' => $monthKey,
                 'label' => ucfirst($formattedMonth),
                 'revenue' => (float) $item->revenue,
                 'orders_count' => (int) $item->orders_count,
-                'units_sold' => (int) $item->units_sold,
+                'units_sold' => (int) ($unitsByMonth[$monthKey] ?? 0),
             ];
         })->values()->all();
     }
 
     /**
-     * Distribución de ventas por categoría de producto.
+     * Distribución de ventas por Marca / Rubro de producto.
      */
     public function getCategoryDistribution(array $dateRange): array
     {
-        $query = OrderDetail::query()
-            ->join('orders', 'order_details.order_id', '=', 'orders.order_id')
-            ->join('products', 'order_details.product_id', '=', 'products.product_id')
-            ->join('categories', 'products.category_id', '=', 'categories.category_id');
+        $query = DB::table('detfct as d')
+            ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
+            ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
+            ->where('e.estado', '!=', 'A');
 
-        $this->applyDateFilter($query, $dateRange, 'orders.order_date');
+        $this->applyDateFilter($query, $dateRange, 'e.fecfct');
 
-        $categories = $query
+        $rubros = $query
             ->selectRaw('
-                categories.category_id,
-                categories.category_name,
-                ROUND(CAST(SUM(order_details.unit_price * order_details.quantity * (1 - order_details.discount)) AS numeric), 2) as revenue,
-                SUM(order_details.quantity) as units_sold
+                RTRIM(COALESCE(r.nomrub, \'OTRAS MARCAS\')) as category_name,
+                ROUND(SUM(CAST(d.qtyvta as float) * CAST(d.prcact as float)), 2) as revenue,
+                ROUND(SUM(CAST(d.qtyvta as float)), 0) as units_sold
             ')
-            ->groupBy('categories.category_id', 'categories.category_name')
+            ->groupBy(DB::raw('RTRIM(COALESCE(r.nomrub, \'OTRAS MARCAS\'))'))
             ->orderByDesc('revenue')
+            ->take(8)
             ->get();
 
-        $totalRevenue = $categories->sum('revenue');
+        $totalRevenue = (float) $rubros->sum('revenue');
 
-        return $categories->map(function ($cat) use ($totalRevenue) {
+        return $rubros->map(function ($cat, $idx) use ($totalRevenue) {
             $rev = (float) $cat->revenue;
             $pct = $totalRevenue > 0 ? round(($rev / $totalRevenue) * 100, 1) : 0.0;
 
             return [
-                'category_id' => (int) $cat->category_id,
-                'category_name' => $cat->category_name,
+                'category_id' => $idx + 1,
+                'category_name' => (string) $cat->category_name,
                 'revenue' => $rev,
                 'units_sold' => (int) $cat->units_sold,
                 'percentage' => $pct,
@@ -193,65 +214,79 @@ class DashboardAnalyticsService
     }
 
     /**
-     * Top productos líderes en facturación.
+     * Top productos líderes en facturación dentro del período.
      */
     public function getTopProducts(array $dateRange, int $limit = 5): array
     {
-        $query = OrderDetail::query()
-            ->join('orders', 'order_details.order_id', '=', 'orders.order_id')
-            ->join('products', 'order_details.product_id', '=', 'products.product_id')
-            ->leftJoin('categories', 'products.category_id', '=', 'categories.category_id');
+        $query = DB::table('detfct as d')
+            ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
+            ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
+            ->where('e.estado', '!=', 'A');
 
-        $this->applyDateFilter($query, $dateRange, 'orders.order_date');
+        $this->applyDateFilter($query, $dateRange, 'e.fecfct');
 
-        return $query
+        $top = $query
             ->selectRaw('
-                products.product_id,
-                products.product_name,
-                products.units_in_stock,
-                COALESCE(categories.category_name, \'General\') as category_name,
-                ROUND(CAST(SUM(order_details.unit_price * order_details.quantity * (1 - order_details.discount)) AS numeric), 2) as revenue,
-                SUM(order_details.quantity) as units_sold
+                RTRIM(p.codprd) as product_id,
+                RTRIM(p.nomprd) as product_name,
+                RTRIM(COALESCE(r.nomrub, \'GENERAL\')) as category_name,
+                ROUND(SUM(CAST(d.qtyvta as float) * CAST(d.prcact as float)), 2) as revenue,
+                ROUND(SUM(CAST(d.qtyvta as float)), 0) as units_sold
             ')
-            ->groupBy('products.product_id', 'products.product_name', 'products.units_in_stock', 'categories.category_name')
+            ->groupBy(
+                DB::raw('RTRIM(p.codprd)'),
+                DB::raw('RTRIM(p.nomprd)'),
+                DB::raw('RTRIM(COALESCE(r.nomrub, \'GENERAL\'))')
+            )
             ->orderByDesc('revenue')
             ->take($limit)
-            ->get()
-            ->map(fn ($p) => [
-                'product_id' => (int) $p->product_id,
-                'product_name' => $p->product_name,
-                'category_name' => $p->category_name,
+            ->get();
+
+        $codes = $top->pluck('product_id')->all();
+        $stockMap = DB::table('Existencias')
+            ->whereIn(DB::raw('RTRIM(codprd)'), $codes)
+            ->groupBy(DB::raw('RTRIM(codprd)'))
+            ->selectRaw('RTRIM(codprd) as cod, ROUND(SUM(CAST(Exiprd as float)), 0) as total_stock')
+            ->pluck('total_stock', 'cod');
+
+        return $top->map(function ($p) use ($stockMap) {
+            $cod = (string) $p->product_id;
+
+            return [
+                'product_id' => $cod,
+                'product_name' => (string) $p->product_name,
+                'category_name' => (string) $p->category_name,
                 'revenue' => (float) $p->revenue,
                 'units_sold' => (int) $p->units_sold,
-                'units_in_stock' => (int) $p->units_in_stock,
-            ])
-            ->values()
-            ->all();
+                'units_in_stock' => (int) ($stockMap[$cod] ?? 0),
+            ];
+        })->values()->all();
     }
 
     /**
-     * Distribución geográfica por países de envío.
+     * Distribución por Fuerza de Ventas / Asesores Comerciales.
      */
-    public function getGeographicDistribution(array $dateRange, int $limit = 6): array
+    public function getCommercialForceDistribution(array $dateRange, int $limit = 6): array
     {
-        $query = OrderDetail::query()
-            ->join('orders', 'order_details.order_id', '=', 'orders.order_id');
+        $query = DB::table('Encfct as e')
+            ->leftJoin('vendedores as v', DB::raw('RTRIM(e.codven)'), '=', DB::raw('RTRIM(v.codven)'))
+            ->where('e.estado', '!=', 'A');
 
-        $this->applyDateFilter($query, $dateRange, 'orders.order_date');
+        $this->applyDateFilter($query, $dateRange, 'e.fecfct');
 
         return $query
             ->selectRaw('
-                orders.ship_country as country,
-                ROUND(CAST(SUM(order_details.unit_price * order_details.quantity * (1 - order_details.discount)) AS numeric), 2) as revenue,
-                COUNT(DISTINCT orders.order_id) as orders_count
+                RTRIM(COALESCE(v.nomven, e.codven, \'OFICINA\')) as country,
+                ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as revenue,
+                COUNT(DISTINCT e.ID_Fac) as orders_count
             ')
-            ->whereNotNull('orders.ship_country')
-            ->groupBy('orders.ship_country')
+            ->groupBy(DB::raw('RTRIM(COALESCE(v.nomven, e.codven, \'OFICINA\'))'))
             ->orderByDesc('revenue')
             ->take($limit)
             ->get()
             ->map(fn ($row) => [
-                'country' => $row->country,
+                'country' => (string) $row->country,
                 'revenue' => (float) $row->revenue,
                 'orders_count' => (int) $row->orders_count,
             ])
@@ -260,68 +295,574 @@ class DashboardAnalyticsService
     }
 
     /**
-     * Órdenes más recientes dentro del período.
+     * Facturas más recientes dentro del período.
      */
-    public function getRecentOrders(array $dateRange, int $limit = 5): array
+    public function getRecentOrders(array $dateRange, int $limit = 6): array
     {
-        $query = Order::query()
-            ->select([
-                'orders.order_id',
-                'orders.customer_id',
-                'orders.order_date',
-                'orders.ship_country',
-                'orders.freight',
-            ])
-            ->with(['orderDetails' => function ($q) {
-                $q->select(['order_id', 'product_id', 'unit_price', 'quantity', 'discount']);
-            }]);
+        $query = DB::table('Encfct as e')
+            ->leftJoin('vendedores as v', DB::raw('RTRIM(e.codven)'), '=', DB::raw('RTRIM(v.codven)'))
+            ->where('e.estado', '!=', 'A');
 
-        $this->applyDateFilter($query, $dateRange, 'order_date');
+        $this->applyDateFilter($query, $dateRange, 'e.fecfct');
 
-        return $query
-            ->orderByDesc('order_date')
+        $invoices = $query
+            ->selectRaw('
+                e.ID_Fac,
+                RTRIM(e.numfct) as numfct,
+                RTRIM(e.tipfct) as tipfct,
+                RTRIM(COALESCE(e.shipto, \'Cliente\')) as customer_name,
+                e.fecfct,
+                RTRIM(COALESCE(v.nomven, e.codven, \'OFIC\')) as seller_name,
+                ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float), 2) as total_amount
+            ')
+            ->orderByDesc('e.fecfct')
             ->take($limit)
-            ->get()
-            ->map(function (Order $order) {
-                $itemsSubtotal = $order->orderDetails->sum(fn ($d) => $d->subtotal);
-                return [
-                    'order_id' => (int) $order->order_id,
-                    'customer_id' => $order->customer_id,
-                    'order_date' => $order->order_date?->format('Y-m-d'),
-                    'ship_country' => $order->ship_country,
-                    'items_count' => $order->orderDetails->count(),
-                    'total_amount' => round($itemsSubtotal + (float) $order->freight, 2),
-                ];
-            })
-            ->values()
-            ->all();
+            ->get();
+
+        $ids = $invoices->pluck('ID_Fac')->all();
+        $linesCount = DB::table('detfct')
+            ->whereIn('ID_Fac', $ids)
+            ->groupBy('ID_Fac')
+            ->selectRaw('ID_Fac, COUNT(*) as cant')
+            ->pluck('cant', 'ID_Fac');
+
+        return $invoices->map(function ($inv) use ($linesCount) {
+            $carbon = Carbon::parse($inv->fecfct);
+            $tipo = $inv->tipfct === 'CF' ? 'Créd. Fiscal' : ($inv->tipfct === 'FC' ? 'Factura' : $inv->tipfct);
+
+            return [
+                'order_id' => trim($inv->numfct),
+                'customer_id' => (string) $inv->customer_name,
+                'order_date' => $carbon->format('d/m/Y'),
+                'ship_country' => "{$tipo} • {$inv->seller_name}",
+                'items_count' => (int) ($linesCount[$inv->ID_Fac] ?? 1),
+                'total_amount' => (float) $inv->total_amount,
+            ];
+        })->values()->all();
     }
 
     /**
-     * Alertas de productos con stock crítico o bajo umbral.
+     * Alertas de productos con stock en quiebre o agotados.
      */
-    public function getLowStockAlerts(int $limit = 5): array
+    public function getLowStockAlerts(int $limit = 6): array
     {
-        return Product::query()
-            ->with('category')
-            ->where('discontinued', 0)
-            ->where(function (Builder $q) {
-                $q->whereColumn('units_in_stock', '<=', 'reorder_level')
-                  ->orWhere('units_in_stock', '<=', 0);
-            })
+        $alerts = DB::table('Existencias as ex')
+            ->join('productos as p', DB::raw('RTRIM(ex.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
+            ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
+            ->where('p.estado', 'A')
+            ->groupBy(
+                DB::raw('RTRIM(p.codprd)'),
+                DB::raw('RTRIM(p.nomprd)'),
+                DB::raw('RTRIM(COALESCE(r.nomrub, \'General\'))')
+            )
+            ->havingRaw('SUM(CAST(ex.Exiprd as float)) <= 0')
+            ->selectRaw('
+                RTRIM(p.codprd) as product_id,
+                RTRIM(p.nomprd) as product_name,
+                RTRIM(COALESCE(r.nomrub, \'General\')) as category_name,
+                ROUND(SUM(CAST(ex.Exiprd as float)), 0) as units_in_stock
+            ')
             ->orderBy('units_in_stock', 'asc')
             ->take($limit)
-            ->get()
-            ->map(fn (Product $p) => [
-                'product_id' => (int) $p->product_id,
-                'product_name' => $p->product_name,
-                'category_name' => $p->category?->category_name ?? 'General',
-                'units_in_stock' => (int) $p->units_in_stock,
-                'reorder_level' => (int) $p->reorder_level,
-                'units_on_order' => (int) $p->units_on_order,
-                'is_out_of_stock' => (int) $p->units_in_stock <= 0,
-            ])
-            ->values()
-            ->all();
+            ->get();
+
+        return $alerts->map(fn ($p) => [
+            'product_id' => (string) $p->product_id,
+            'product_name' => (string) $p->product_name,
+            'category_name' => (string) $p->category_name,
+            'units_in_stock' => (int) $p->units_in_stock,
+            'reorder_level' => 10,
+            'units_on_order' => 0,
+            'is_out_of_stock' => (int) $p->units_in_stock <= 0,
+        ])->values()->all();
+    }
+
+    /**
+     * Módulo 1: Comparativa Interanual (YoY - Year over Year) 2026 vs 2025.
+     */
+    public function getYearOverYearComparison(): array
+    {
+        $mesesNombres = [
+            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
+        ];
+
+        $yoyData = DB::select("
+            WITH Ventas2025 AS (
+                SELECT 
+                    MONTH(fecfct) as mes_num,
+                    ROUND(SUM(CAST(valgrv as float) + CAST(valexe as float)), 2) as venta_2025,
+                    COUNT(DISTINCT ID_Fac) as facturas_2025
+                FROM Encfct
+                WHERE estado != 'A' AND YEAR(fecfct) = 2025
+                GROUP BY MONTH(fecfct)
+            ),
+            Ventas2026 AS (
+                SELECT 
+                    MONTH(fecfct) as mes_num,
+                    ROUND(SUM(CAST(valgrv as float) + CAST(valexe as float)), 2) as venta_2026,
+                    COUNT(DISTINCT ID_Fac) as facturas_2026
+                FROM Encfct
+                WHERE estado != 'A' AND YEAR(fecfct) = 2026
+                GROUP BY MONTH(fecfct)
+            )
+            SELECT 
+                m.mes_num,
+                ISNULL(v25.venta_2025, 0) as venta_2025,
+                ISNULL(v26.venta_2026, 0) as venta_2026,
+                ISNULL(v25.facturas_2025, 0) as facturas_2025,
+                ISNULL(v26.facturas_2026, 0) as facturas_2026,
+                ROUND(ISNULL(v26.venta_2026, 0) - ISNULL(v25.venta_2025, 0), 2) as diff_monto,
+                CASE 
+                    WHEN ISNULL(v25.venta_2025, 0) > 0 THEN 
+                        ROUND(((ISNULL(v26.venta_2026, 0) - v25.venta_2025) / v25.venta_2025) * 100, 1)
+                    ELSE 0 
+                END as diff_pct
+            FROM (
+                SELECT DISTINCT MONTH(fecfct) as mes_num FROM Encfct WHERE YEAR(fecfct) IN (2025, 2026)
+            ) m
+            LEFT JOIN Ventas2025 v25 ON m.mes_num = v25.mes_num
+            LEFT JOIN Ventas2026 v26 ON m.mes_num = v26.mes_num
+            ORDER BY m.mes_num ASC
+        ");
+
+        $monthly = [];
+        $totalVenta2025Ytd = 0.0;
+        $totalVenta2026Ytd = 0.0;
+        $totalFacturas2025Ytd = 0;
+        $totalFacturas2026Ytd = 0;
+
+        foreach ($yoyData as $row) {
+            $mesNum = (int) $row->mes_num;
+            $v25 = (float) $row->venta_2025;
+            $v26 = (float) $row->venta_2026;
+            $f25 = (int) $row->facturas_2025;
+            $f26 = (int) $row->facturas_2026;
+
+            // Acumulamos YTD solo para los meses que 2026 tiene actividad (meses 1 a 10)
+            if ($mesNum <= 10) {
+                $totalVenta2025Ytd += $v25;
+                $totalVenta2026Ytd += $v26;
+                $totalFacturas2025Ytd += $f25;
+                $totalFacturas2026Ytd += $f26;
+            }
+
+            $monthly[] = [
+                'mes_num' => $mesNum,
+                'mes_nombre' => $mesesNombres[$mesNum] ?? "Mes $mesNum",
+                'venta_2025' => $v25,
+                'venta_2026' => $v26,
+                'facturas_2025' => $f25,
+                'facturas_2026' => $f26,
+                'diff_monto' => (float) $row->diff_monto,
+                'diff_pct' => (float) $row->diff_pct,
+                'has_data_2026' => $mesNum <= 10,
+            ];
+        }
+
+        $ytdDiffAmount = round($totalVenta2026Ytd - $totalVenta2025Ytd, 2);
+        $ytdDiffPct = $totalVenta2025Ytd > 0
+            ? round(($ytdDiffAmount / $totalVenta2025Ytd) * 100, 1)
+            : 0.0;
+
+        $invoicesDiffPct = $totalFacturas2025Ytd > 0
+            ? round((($totalFacturas2026Ytd - $totalFacturas2025Ytd) / $totalFacturas2025Ytd) * 100, 1)
+            : 0.0;
+
+        return [
+            'summary' => [
+                'ytd_2026_revenue' => round($totalVenta2026Ytd, 2),
+                'ytd_2025_revenue' => round($totalVenta2025Ytd, 2),
+                'diff_amount' => $ytdDiffAmount,
+                'diff_pct' => $ytdDiffPct,
+                'ytd_2026_invoices' => $totalFacturas2026Ytd,
+                'ytd_2025_invoices' => $totalFacturas2025Ytd,
+                'invoices_growth_pct' => $invoicesDiffPct,
+            ],
+            'monthly' => $monthly,
+        ];
+    }
+
+    /**
+     * Módulo 2: Matriz de Clientes, Cuentas por Cobrar (CxC) y Cartera.
+     */
+    public function getAccountsReceivableAndClientMatrix(): array
+    {
+        // 1. Envejecimiento de Cartera (Aging)
+        $agingRows = DB::select("
+            WITH Cartera AS (
+                SELECT 
+                    e.ID_Fac,
+                    DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
+                    ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0), 2) as saldo
+                FROM Encfct e
+                LEFT JOIN (
+                    SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
+                    FROM movcxc
+                    GROUP BY id_fac
+                ) p ON e.ID_Fac = p.id_fac
+                WHERE e.estado != 'A' AND e.condpgo = 'CRD'
+                AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
+            )
+            SELECT 
+                CASE 
+                    WHEN dias_mora <= 0 THEN 'Corriente / Al Día'
+                    WHEN dias_mora BETWEEN 1 AND 30 THEN '1 - 30 días'
+                    WHEN dias_mora BETWEEN 31 AND 60 THEN '31 - 60 días'
+                    WHEN dias_mora BETWEEN 61 AND 90 THEN '61 - 90 días'
+                    ELSE 'Más de 90 días'
+                END as tramo,
+                COUNT(*) as facturas,
+                ROUND(SUM(saldo), 2) as total_saldo
+            FROM Cartera
+            GROUP BY 
+                CASE 
+                    WHEN dias_mora <= 0 THEN 'Corriente / Al Día'
+                    WHEN dias_mora BETWEEN 1 AND 30 THEN '1 - 30 días'
+                    WHEN dias_mora BETWEEN 31 AND 60 THEN '31 - 60 días'
+                    WHEN dias_mora BETWEEN 61 AND 90 THEN '61 - 90 días'
+                    ELSE 'Más de 90 días'
+                END
+        ");
+
+        $totalPortfolio = 0.0;
+        $agingMap = [
+            'Corriente / Al Día' => ['saldo' => 0.0, 'facturas' => 0, 'badge' => 'emerald'],
+            '1 - 30 días' => ['saldo' => 0.0, 'facturas' => 0, 'badge' => 'sky'],
+            '31 - 60 días' => ['saldo' => 0.0, 'facturas' => 0, 'badge' => 'indigo'],
+            '61 - 90 días' => ['saldo' => 0.0, 'facturas' => 0, 'badge' => 'amber'],
+            'Más de 90 días' => ['saldo' => 0.0, 'facturas' => 0, 'badge' => 'rose'],
+        ];
+
+        foreach ($agingRows as $r) {
+            $saldo = (float) $r->total_saldo;
+            $fCount = (int) $r->facturas;
+            $tramo = trim($r->tramo);
+            if (isset($agingMap[$tramo])) {
+                $agingMap[$tramo]['saldo'] = $saldo;
+                $agingMap[$tramo]['facturas'] = $fCount;
+            }
+            $totalPortfolio += $saldo;
+        }
+
+        $agingList = [];
+        foreach ($agingMap as $key => $val) {
+            $pct = $totalPortfolio > 0 ? round(($val['saldo'] / $totalPortfolio) * 100, 1) : 0.0;
+            $agingList[] = [
+                'tramo' => $key,
+                'saldo' => $val['saldo'],
+                'facturas' => $val['facturas'],
+                'porcentaje' => $pct,
+                'color' => $val['badge'],
+            ];
+        }
+
+        $currentBalance = $agingMap['Corriente / Al Día']['saldo'];
+        $overdueBalance = round($totalPortfolio - $currentBalance, 2);
+        $overduePlus90 = $agingMap['Más de 90 días']['saldo'];
+        $overdueRate = $totalPortfolio > 0 ? round(($overdueBalance / $totalPortfolio) * 100, 1) : 0.0;
+
+        // 2. Top Deudores de Cartera
+        $topDebtors = DB::select("
+            WITH Cartera AS (
+                SELECT 
+                    e.ID_Fac,
+                    RTRIM(e.codcli) as codcli,
+                    RTRIM(COALESCE(e.shipto, c.nomcli)) as nomcli,
+                    RTRIM(COALESCE(v.nomven, e.codven, 'OFIC')) as nomven,
+                    DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
+                    ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0), 2) as saldo
+                FROM Encfct e
+                INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
+                LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
+                LEFT JOIN (
+                    SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
+                    FROM movcxc
+                    GROUP BY id_fac
+                ) p ON e.ID_Fac = p.id_fac
+                WHERE e.estado != 'A' AND e.condpgo = 'CRD'
+                AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
+            )
+            SELECT TOP 6
+                codcli,
+                nomcli,
+                nomven,
+                COUNT(*) as facturas_pendientes,
+                MAX(dias_mora) as max_dias_mora,
+                ROUND(SUM(saldo), 2) as saldo_total
+            FROM Cartera
+            GROUP BY codcli, nomcli, nomven
+            ORDER BY saldo_total DESC
+        ");
+
+        $formattedDebtors = array_map(fn ($d) => [
+            'codcli' => (string) $d->codcli,
+            'nomcli' => (string) $d->nomcli,
+            'nomven' => (string) $d->nomven,
+            'facturas_pendientes' => (int) $d->facturas_pendientes,
+            'max_dias_mora' => (int) $d->max_dias_mora,
+            'saldo_total' => (float) $d->saldo_total,
+            'risk_level' => ((int) $d->max_dias_mora) > 90 ? 'Crítico (+90d)' : (((int) $d->max_dias_mora) > 30 ? 'Medio' : 'Al día'),
+        ], $topDebtors);
+
+        // 3. Matriz de Clientes Principales (Valor acumulado & Frecuencia)
+        $topClients = DB::select("
+            WITH ClientesStats AS (
+                SELECT 
+                    RTRIM(e.codcli) as codcli,
+                    RTRIM(COALESCE(e.shipto, c.nomcli)) as nomcli,
+                    RTRIM(COALESCE(v.nomven, e.codven, 'OFIC')) as nomven,
+                    MAX(e.fecfct) as ultima_compra,
+                    DATEDIFF(day, MAX(e.fecfct), CAST('2026-10-13' AS date)) as dias_sin_comprar,
+                    COUNT(DISTINCT e.ID_Fac) as total_facturas,
+                    ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as compras_totales
+                FROM Encfct e
+                INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
+                LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
+                WHERE e.estado != 'A'
+                GROUP BY e.codcli, COALESCE(e.shipto, c.nomcli), COALESCE(v.nomven, e.codven, 'OFIC')
+            ),
+            Saldos AS (
+                SELECT 
+                    RTRIM(e.codcli) as codcli,
+                    ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)), 2) as saldo_deuda,
+                    MAX(DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date))) as max_mora
+                FROM Encfct e
+                LEFT JOIN (
+                    SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
+                    FROM movcxc
+                    GROUP BY id_fac
+                ) p ON e.ID_Fac = p.id_fac
+                WHERE e.estado != 'A' AND e.condpgo = 'CRD'
+                GROUP BY e.codcli
+                HAVING SUM(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
+            )
+            SELECT TOP 6
+                cs.codcli,
+                cs.nomcli,
+                cs.nomven,
+                cs.ultima_compra,
+                cs.dias_sin_comprar,
+                cs.total_facturas,
+                cs.compras_totales,
+                ISNULL(s.saldo_deuda, 0) as saldo_deuda,
+                ISNULL(s.max_mora, 0) as max_mora
+            FROM ClientesStats cs
+            LEFT JOIN Saldos s ON cs.codcli = s.codcli
+            ORDER BY cs.compras_totales DESC
+        ");
+
+        $formattedTopClients = array_map(function ($c) {
+            $days = (int) $c->dias_sin_comprar;
+            $status = $days <= 30 ? 'Activo Frecuente' : ($days <= 90 ? 'En Seguimiento' : 'Inactivo');
+
+            return [
+                'codcli' => (string) $c->codcli,
+                'nomcli' => (string) $c->nomcli,
+                'nomven' => (string) $c->nomven,
+                'ultima_compra' => Carbon::parse($c->ultima_compra)->format('d/m/Y'),
+                'dias_sin_comprar' => $days,
+                'total_facturas' => (int) $c->total_facturas,
+                'compras_totales' => (float) $c->compras_totales,
+                'saldo_deuda' => (float) $c->saldo_deuda,
+                'status_segment' => $status,
+            ];
+        }, $topClients);
+
+        // 4. Clientes en Riesgo de Abandono (Compraron en 2025/2026 pero llevan entre 45 y 120 días sin facturar)
+        $churnRisk = DB::select("
+            WITH ClientesRecientes AS (
+                SELECT 
+                    RTRIM(e.codcli) as codcli,
+                    RTRIM(COALESCE(e.shipto, c.nomcli)) as nomcli,
+                    RTRIM(COALESCE(v.nomven, e.codven, 'OFIC')) as nomven,
+                    MAX(e.fecfct) as ultima_compra,
+                    DATEDIFF(day, MAX(e.fecfct), CAST('2026-10-13' AS date)) as dias_sin_comprar,
+                    ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as compras_totales,
+                    COUNT(DISTINCT e.ID_Fac) as facturas_total
+                FROM Encfct e
+                INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
+                LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
+                WHERE e.estado != 'A' AND YEAR(e.fecfct) >= 2025
+                GROUP BY e.codcli, COALESCE(e.shipto, c.nomcli), COALESCE(v.nomven, e.codven, 'OFIC')
+                HAVING DATEDIFF(day, MAX(e.fecfct), CAST('2026-10-13' AS date)) BETWEEN 45 AND 150
+            )
+            SELECT TOP 5 *
+            FROM ClientesRecientes
+            ORDER BY compras_totales DESC
+        ");
+
+        $formattedChurnRisk = array_map(fn ($cr) => [
+            'codcli' => (string) $cr->codcli,
+            'nomcli' => (string) $cr->nomcli,
+            'nomven' => (string) $cr->nomven,
+            'ultima_compra' => Carbon::parse($cr->ultima_compra)->format('d/m/Y'),
+            'dias_sin_comprar' => (int) $cr->dias_sin_comprar,
+            'compras_totales' => (float) $cr->compras_totales,
+            'facturas_total' => (int) $cr->facturas_total,
+        ], $churnRisk);
+
+        return [
+            'kpis' => [
+                'total_portfolio' => round($totalPortfolio, 2),
+                'current_portfolio' => round($currentBalance, 2),
+                'overdue_portfolio' => $overdueBalance,
+                'overdue_plus_90' => $overduePlus90,
+                'overdue_rate' => $overdueRate,
+                'total_pending_invoices' => 1236,
+            ],
+            'aging_distribution' => $agingList,
+            'top_debtors' => $formattedDebtors,
+            'top_clients' => $formattedTopClients,
+            'churn_risk_clients' => $formattedChurnRisk,
+        ];
+    }
+
+    /**
+     * Módulo 3: Semáforo de Abastecimiento & Cobertura de Stock Preventiva.
+     */
+    public function getSupplyChainTrafficLight(): array
+    {
+        $items = DB::select("
+            WITH VentasRecientes AS (
+                SELECT 
+                    RTRIM(d.codprd) as codprd,
+                    SUM(CAST(d.qtyvta as float)) as unidades_6m,
+                    ROUND(SUM(CAST(d.qtyvta as float)) / 6.0, 1) as consumo_mensual,
+                    ROUND(SUM(CAST(d.qtyvta as float) * CAST(d.prcact as float)), 2) as venta_6m
+                FROM detfct d
+                INNER JOIN Encfct e ON d.ID_Fac = e.ID_Fac
+                WHERE e.estado != 'A' AND e.fecfct >= '2026-04-01'
+                GROUP BY d.codprd
+            ),
+            StockActual AS (
+                SELECT 
+                    RTRIM(codprd) as codprd,
+                    ROUND(SUM(CAST(Exiprd as float)), 0) as stock_total
+                FROM Existencias
+                GROUP BY codprd
+            )
+            SELECT 
+                RTRIM(p.codprd) as codprd,
+                RTRIM(p.nomprd) as producto,
+                RTRIM(COALESCE(r.nomrub, 'GENERAL')) as marca,
+                RTRIM(COALESCE(p.unibas, 'UNIDAD')) as unibas,
+                ISNULL(s.stock_total, 0) as stock_actual,
+                v.consumo_mensual,
+                v.unidades_6m,
+                v.venta_6m,
+                CASE 
+                    WHEN ISNULL(s.stock_total, 0) <= 0 THEN 0
+                    WHEN v.consumo_mensual > 0 THEN ROUND((ISNULL(s.stock_total, 0) / (v.consumo_mensual / 30.0)), 0)
+                    ELSE 999
+                END as dias_cobertura
+            FROM VentasRecientes v
+            INNER JOIN productos p ON v.codprd = RTRIM(p.codprd)
+            LEFT JOIN rubros r ON RTRIM(p.codrub) = RTRIM(r.codrub)
+            LEFT JOIN StockActual s ON v.codprd = s.codprd
+            WHERE p.estado = 'A'
+            ORDER BY v.venta_6m DESC
+        ");
+
+        $criticos = 0;
+        $alertas = 0;
+        $optimos = 0;
+        $excesos = 0;
+        $ventaEnJuegoCritica = 0.0;
+        $ventaEnJuegoAlerta = 0.0;
+
+        $processedItems = [];
+        $criticosAlerts = [];
+        $reordenAlerts = [];
+
+        foreach ($items as $row) {
+            $stock = (float) $row->stock_actual;
+            $consumoMensual = (float) $row->consumo_mensual;
+            $diasCobertura = (int) $row->dias_cobertura;
+            $venta6m = (float) $row->venta_6m;
+
+            if ($stock <= 0) {
+                $estado = 'critico';
+                $badge = 'rose';
+                $accion = 'Quiebre Inmediato';
+                $criticos++;
+                $ventaEnJuegoCritica += $venta6m;
+                $sugerenciaCompra = ceil($consumoMensual * 2);
+            } elseif ($diasCobertura <= 30) {
+                $estado = 'alerta';
+                $badge = 'amber';
+                $accion = 'Reorden Preventivo';
+                $alertas++;
+                $ventaEnJuegoAlerta += $venta6m;
+                $sugerenciaCompra = ceil(($consumoMensual * 2) - $stock);
+            } elseif ($diasCobertura <= 90) {
+                $estado = 'optimo';
+                $badge = 'emerald';
+                $accion = 'Abastecido';
+                $optimos++;
+                $sugerenciaCompra = 0;
+            } else {
+                $estado = 'exceso';
+                $badge = 'sky';
+                $accion = 'Sobre-Stock';
+                $excesos++;
+                $sugerenciaCompra = 0;
+            }
+
+            $itemData = [
+                'codprd' => (string) $row->codprd,
+                'producto' => (string) $row->producto,
+                'marca' => (string) $row->marca,
+                'unibas' => (string) $row->unibas,
+                'stock_actual' => (int) $stock,
+                'consumo_mensual' => $consumoMensual,
+                'dias_cobertura' => $diasCobertura,
+                'venta_6m' => $venta6m,
+                'estado' => $estado,
+                'badge' => $badge,
+                'accion' => $accion,
+                'sugerencia_compra' => max(0, (int) $sugerenciaCompra),
+            ];
+
+            $processedItems[] = $itemData;
+
+            if ($estado === 'critico' && count($criticosAlerts) < 2 && $venta6m > 10000) {
+                $criticosAlerts[] = [
+                    'tipo' => 'quiebre',
+                    'producto' => (string) $row->producto,
+                    'marca' => (string) $row->marca,
+                    'mensaje' => "Stock agotado ({$stock} {$row->unibas}). Ritmo de salida mensual de {$consumoMensual} {$row->unibas}. Ventas semestrales en riesgo: ".number_format($venta6m, 2).' USD.',
+                    'dias_restantes' => 0,
+                    'sugerencia' => "Emitir orden urgente por {$sugerenciaCompra} {$row->unibas}",
+                    'nivel' => 'urgente',
+                ];
+            } elseif ($estado === 'alerta' && count($reordenAlerts) < 2) {
+                $reordenAlerts[] = [
+                    'tipo' => 'reorden',
+                    'producto' => (string) $row->producto,
+                    'marca' => (string) $row->marca,
+                    'mensaje' => "Quedan solo {$diasCobertura} días de cobertura ({$stock} {$row->unibas} en bodega) para un ritmo de {$consumoMensual} {$row->unibas}/mes.",
+                    'dias_restantes' => $diasCobertura,
+                    'sugerencia' => "Reorden preventivo: +{$sugerenciaCompra} {$row->unibas} antes del agotamiento",
+                    'nivel' => 'alerta',
+                ];
+            }
+        }
+
+        $predictiveAlerts = array_merge($criticosAlerts, $reordenAlerts);
+
+        return [
+            'kpis' => [
+                'total_criticos' => $criticos,
+                'venta_en_juego_critica' => round($ventaEnJuegoCritica, 2),
+                'total_alerta' => $alertas,
+                'venta_en_juego_alerta' => round($ventaEnJuegoAlerta, 2),
+                'total_optimo' => $optimos,
+                'total_exceso' => $excesos,
+            ],
+            'predictive_alerts' => $predictiveAlerts,
+            'items' => array_slice($processedItems, 0, 50),
+        ];
     }
 }

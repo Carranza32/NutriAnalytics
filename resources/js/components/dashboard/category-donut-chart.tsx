@@ -107,11 +107,11 @@ export function CategoryDonutChart({ data }: CategoryDonutChartProps) {
                 <div className="flex items-center gap-2">
                     <PieChart className="size-4.5 text-indigo-500 dark:text-indigo-400" />
                     <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
-                        Ventas por Categoría
+                        Ventas por Marca / Rubro
                     </h2>
                 </div>
                 <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                    Participación porcentual en facturación
+                    Participación de mercado por fabricante o línea
                 </p>
 
                 <div className="mt-3 flex items-center justify-center min-h-[220px]">

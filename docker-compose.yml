@@ -1,0 +1,11 @@
+services:
+  sqlserver:
+    container_name: sqlserver-agro
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    ports:
+      - "1433:1433"
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=SqlStrongPassword2026#
+      - MSSQL_PID=developer

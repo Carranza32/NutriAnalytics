@@ -31,6 +31,22 @@ test('authenticated users can visit the dashboard', function () {
                 'geo_distribution' => [],
                 'recent_orders' => [],
                 'low_stock_alerts' => [],
+                'yoy_comparison' => [
+                    'kpis' => ['current_ytd' => 0, 'previous_ytd' => 0, 'growth_rate' => 0, 'revenue_difference' => 0, 'projected_year_end' => 0],
+                    'monthly_comparison' => [],
+                ],
+                'cxc_matrix' => [
+                    'kpis' => ['total_portfolio' => 0, 'current_portfolio' => 0, 'overdue_portfolio' => 0, 'overdue_plus_90' => 0, 'overdue_rate' => 0, 'total_pending_invoices' => 0],
+                    'aging_distribution' => [],
+                    'top_debtors' => [],
+                    'top_clients' => [],
+                    'churn_risk_clients' => [],
+                ],
+                'supply_chain' => [
+                    'kpis' => ['total_criticos' => 0, 'venta_en_juego_critica' => 0, 'total_alerta' => 0, 'venta_en_juego_alerta' => 0, 'total_optimo' => 0, 'total_exceso' => 0],
+                    'predictive_alerts' => [],
+                    'items' => [],
+                ],
             ]);
     });
 
@@ -38,5 +54,11 @@ test('authenticated users can visit the dashboard', function () {
     $this->actingAs($user);
 
     $response = $this->get(route('dashboard'));
-    $response->assertOk();
+    $response->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('dashboard')
+            ->has('supply_chain')
+            ->has('yoy_comparison')
+            ->has('cxc_matrix')
+        );
 });

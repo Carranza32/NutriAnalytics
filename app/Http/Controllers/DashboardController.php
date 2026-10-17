@@ -18,8 +18,8 @@ class DashboardController extends Controller
      */
     public function index(Request $request): Response
     {
-        $period = $request->query('period', 'all');
-        $dashboardData = $this->analyticsService->getDashboardData(is_string($period) ? $period : 'all');
+        $period = $request->query('period', '2026');
+        $dashboardData = $this->analyticsService->getDashboardData(is_string($period) ? $period : '2026');
 
         return Inertia::render('dashboard', $dashboardData);
     }

@@ -97,11 +97,11 @@ export function GeoDistributionChart({ data }: GeoDistributionChartProps) {
                     <div className="flex items-center gap-2">
                         <Globe2 className="size-4.5 text-indigo-500 dark:text-indigo-400" />
                         <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
-                            Mercados Internacionales
+                            Fuerza de Ventas & Canales
                         </h2>
                     </div>
                     <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                        Ingresos por país de destino principal
+                        Facturación generada por asesor y punto de atención
                     </p>
                 </div>
             </div>
@@ -130,7 +130,7 @@ export function GeoDistributionChart({ data }: GeoDistributionChartProps) {
                     >
                         <span className="font-semibold">{item.country}:</span>
                         <span className="text-neutral-500 dark:text-neutral-400">
-                            {formatNumber(item.orders_count)} órdenes
+                            {formatNumber(item.orders_count)} facturas
                         </span>
                     </span>
                 ))}
