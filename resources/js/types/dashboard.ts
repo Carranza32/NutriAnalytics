@@ -189,9 +189,16 @@ export interface SupplyChainTrafficLight {
     items: SupplyItem[];
 }
 
+export interface SucursalOption {
+    id: string;
+    name: string;
+}
+
 export interface DashboardProps {
     period: string;
     available_periods: PeriodOption[];
+    sucursal: string;
+    available_sucursales: SucursalOption[];
     kpis: DashboardKpis;
     sales_trend: MonthlySalesPoint[];
     category_distribution: CategoryDistributionItem[];
@@ -202,4 +209,6 @@ export interface DashboardProps {
     yoy_comparison: YoYComparison;
     cxc_matrix: AccountsReceivableMatrix;
     supply_chain: SupplyChainTrafficLight;
+    last_updated?: string;
+    is_cached?: boolean;
 }

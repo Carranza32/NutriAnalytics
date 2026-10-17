@@ -19,7 +19,14 @@ class DashboardController extends Controller
     public function index(Request $request): Response
     {
         $period = $request->query('period', '2026');
-        $dashboardData = $this->analyticsService->getDashboardData(is_string($period) ? $period : '2026');
+        $sucursal = $request->query('sucursal', 'all');
+        $forceRefresh = $request->boolean('refresh', false);
+
+        $dashboardData = $this->analyticsService->getDashboardData(
+            is_string($period) ? $period : '2026',
+            is_string($sucursal) ? $sucursal : 'all',
+            $forceRefresh
+        );
 
         return Inertia::render('dashboard', $dashboardData);
     }

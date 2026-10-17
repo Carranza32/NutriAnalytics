@@ -4,10 +4,12 @@ import {
     AlertCircle,
     BarChart3,
     Boxes,
+    Building2,
     Calendar,
     DollarSign,
     GitCompare,
     PackageCheck,
+    RefreshCw,
     ShoppingBag,
     Users2,
 } from 'lucide-react';
@@ -26,20 +28,36 @@ import type { DashboardProps } from '@/types/dashboard';
 
 type DashboardTab = 'overview' | 'yoy' | 'cxc' | 'supply';
 
+function formatLastUpdated(isoString?: string): string {
+    if (!isoString) return '';
+    try {
+        const date = new Date(isoString);
+        return date.toLocaleTimeString('es-SV', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+        });
+    } catch {
+        return '';
+    }
+}
+
 export default function Dashboard({
     period,
     available_periods,
+    sucursal,
+    available_sucursales,
     kpis,
     sales_trend,
     category_distribution,
     top_products,
     geo_distribution,
-    recent_orders,
-    low_stock_alerts,
     yoy_comparison,
     cxc_matrix,
     supply_chain,
+    last_updated,
 }: DashboardProps) {
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [currentTab, setCurrentTab] = useState<DashboardTab>(() => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
@@ -60,22 +78,57 @@ export default function Dashboard({
         }
     };
 
-    const handlePeriodChange = (newPeriod: string) => {
+    const handleSucursalChange = (newSucursal: string) => {
         router.get(
             dashboard(),
-            { period: newPeriod },
+            {
+                period,
+                sucursal: newSucursal,
+                tab: currentTab,
+            },
             {
                 preserveState: true,
                 preserveScroll: true,
-                only: [
-                    'period',
-                    'kpis',
-                    'sales_trend',
-                    'category_distribution',
-                    'top_products',
-                    'geo_distribution',
-                    'recent_orders',
-                ],
+            }
+        );
+    };
+
+    const handlePeriodChange = (newPeriod: string) => {
+        router.get(
+            dashboard(),
+            {
+                period: newPeriod,
+                sucursal: sucursal || 'all',
+                tab: currentTab,
+            },
+            {
+                preserveState: true,
+                preserveScroll: true,
+            }
+        );
+    };
+
+    const handleRefresh = () => {
+        setIsRefreshing(true);
+        router.get(
+            dashboard(),
+            {
+                period,
+                sucursal: sucursal || 'all',
+                tab: currentTab,
+                refresh: 1,
+            },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                onFinish: () => {
+                    setIsRefreshing(false);
+                    if (typeof window !== 'undefined') {
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete('refresh');
+                        window.history.replaceState({}, '', url.toString());
+                    }
+                },
             }
         );
     };
@@ -88,12 +141,6 @@ export default function Dashboard({
                 {/* Header Superior con Estética Apple */}
                 <header className="flex flex-col justify-between gap-4 border-b border-black/[0.06] pb-5 lg:flex-row lg:items-center dark:border-white/[0.06]">
                     <div>
-                        <div className="flex items-center gap-2">
-                            <span className="inline-flex size-2 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-xs font-semibold tracking-wider text-emerald-600 uppercase dark:text-emerald-400">
-                                NutriAnalytics Engine • GeoSoft ERP
-                            </span>
-                        </div>
                         <h1 className="mt-1 text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl dark:text-neutral-50">
                             Centro de Inteligencia Empresarial
                         </h1>
@@ -222,19 +269,44 @@ export default function Dashboard({
                     </div>
                 </header>
 
-                {/* Vista 1: Resumen Ejecutivo & Ventas */}
-                {currentTab === 'overview' && (
-                    <div className="space-y-6">
-                        {/* Selector de Período exclusivo para Vista General */}
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                                Filtrando datos por ejercicio contable:
+                {/* Barra Global de Control: Selector de Sucursal & Ejercicio Contable (Apple Toolbar) */}
+                <div className="flex flex-col gap-3 rounded-2xl border border-black/[0.06] bg-white/70 p-3.5 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.08] dark:bg-neutral-900/70">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2 pl-1">
+                            <Building2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                            <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                                Sucursal:
                             </span>
+                        </div>
 
-                            <div className="flex items-center rounded-2xl border border-black/[0.06] bg-neutral-100/80 p-1.5 backdrop-blur-md dark:border-white/[0.08] dark:bg-neutral-800/80">
-                                <div className="mr-1.5 flex items-center pl-2 text-neutral-400">
-                                    <Calendar className="size-3.5" />
-                                </div>
+                        {/* Dropdown de Sucursales estilizado Apple */}
+                        <div className="relative">
+                            <select
+                                value={sucursal || 'all'}
+                                onChange={(e) => handleSucursalChange(e.target.value)}
+                                className="h-9 cursor-pointer rounded-xl border border-black/[0.08] bg-neutral-100/90 px-3 py-1.5 pr-8 text-xs font-semibold text-neutral-900 transition-all hover:bg-neutral-200/80 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-white/[0.1] dark:bg-neutral-800/90 dark:text-neutral-100 dark:hover:bg-neutral-700"
+                            >
+                                {available_sucursales.map((s) => (
+                                    <option
+                                        key={s.id}
+                                        value={s.id}
+                                        className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
+                                    >
+                                        {s.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Controles Derechos: Selector de Ejercicio Contable & Botón Actualizar Datos */}
+                    <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 text-neutral-400">
+                                <Calendar className="size-3.5" />
+                                <span className="text-[11px] font-medium">Período:</span>
+                            </div>
+                            <div className="flex items-center rounded-xl border border-black/[0.06] bg-neutral-100/80 p-1 dark:border-white/[0.08] dark:bg-neutral-800/80">
                                 {available_periods.map((p) => {
                                     const isSelected = period === p.id;
                                     return (
@@ -242,34 +314,58 @@ export default function Dashboard({
                                             key={p.id}
                                             type="button"
                                             onClick={() => handlePeriodChange(p.id)}
-                                            className="relative rounded-xl px-3 py-1 text-xs font-medium transition-colors"
-                                        >
-                                            {isSelected && (
-                                                <motion.div
-                                                    layoutId="periodPillHighlight"
-                                                    className="absolute inset-0 rounded-xl bg-white shadow-xs dark:bg-neutral-700"
-                                                    transition={{
-                                                        type: 'spring',
-                                                        bounce: 0,
-                                                        duration: 0.35,
-                                                    }}
-                                                />
+                                            className={cn(
+                                                'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                                                isSelected
+                                                    ? 'bg-white font-semibold text-neutral-900 shadow-2xs dark:bg-neutral-700 dark:text-neutral-50'
+                                                    : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400'
                                             )}
-                                            <span
-                                                className={cn(
-                                                    'relative z-10 transition-colors',
-                                                    isSelected
-                                                        ? 'font-semibold text-neutral-900 dark:text-neutral-50'
-                                                        : 'text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100'
-                                                )}
-                                            >
-                                                {p.label}
-                                            </span>
+                                        >
+                                            {p.id === 'all' ? 'Histórico' : p.id}
                                         </button>
                                     );
                                 })}
                             </div>
                         </div>
+
+                        {/* Divisor vertical */}
+                        <div className="hidden h-5 w-px bg-neutral-200 md:block dark:bg-neutral-800" />
+
+                        {/* Botón de Actualizar Datos y Timestamp de Caché */}
+                        <div className="flex items-center gap-2">
+                            {last_updated && (
+                                <span
+                                    title={`Última sincronización con SQL Server: ${last_updated}`}
+                                    className="hidden text-[11px] font-medium text-neutral-500 xl:inline-block dark:text-neutral-400"
+                                >
+                                    Caché: {formatLastUpdated(last_updated)}
+                                </span>
+                            )}
+                            <button
+                                type="button"
+                                onClick={handleRefresh}
+                                disabled={isRefreshing}
+                                title="Forzar sincronización inmediata en tiempo real con SQL Server"
+                                className={cn(
+                                    'inline-flex items-center gap-1.5 rounded-xl border border-black/[0.08] bg-neutral-100/90 px-3 py-1.5 text-xs font-semibold text-neutral-700 transition-all hover:bg-neutral-200/80 hover:text-neutral-900 active:scale-95 disabled:pointer-events-none disabled:opacity-50 dark:border-white/[0.1] dark:bg-neutral-800/90 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-neutral-100',
+                                    isRefreshing && 'opacity-80'
+                                )}
+                            >
+                                <RefreshCw
+                                    className={cn(
+                                        'size-3.5 text-neutral-500 transition-transform dark:text-neutral-400',
+                                        isRefreshing && 'animate-spin text-emerald-600 dark:text-emerald-400'
+                                    )}
+                                />
+                                <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Vista 1: Resumen Ejecutivo & Ventas */}
+                {currentTab === 'overview' && (
+                    <div className="space-y-6">
 
                         {/* Grid de KPIs Ejecutivos */}
                         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -304,7 +400,7 @@ export default function Dashboard({
                             />
 
                             <KpiCard
-                                title="Productos en Quiebre / 0"
+                                title="Productos en Quiebre"
                                 value={`${kpis.low_stock_count}`}
                                 subtitle="Artículos con stock agotado o en negativo"
                                 icon={AlertCircle}

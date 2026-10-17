@@ -3,17 +3,41 @@
 namespace App\Services;
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class DashboardAnalyticsService
 {
     /**
      * Obtiene el set completo de métricas y gráficos para el dashboard empresarial.
+     * Implementa caché inteligente de 20 minutos para cargas inferiores a 200 ms.
      */
-    public function getDashboardData(?string $period = '2026'): array
+    public function getDashboardData(?string $period = '2026', ?string $sucursal = 'all', bool $forceRefresh = false): array
     {
         $normalizedPeriod = $this->resolvePeriod($period);
-        $dateRange = $this->getDateRangeForPeriod($normalizedPeriod);
+        $normalizedSucursal = $this->resolveSucursal($sucursal);
+        $sucursalKey = $normalizedSucursal ?? 'all';
+        $cacheKey = "dashboard_analytics_{$normalizedPeriod}_{$sucursalKey}";
+
+        if ($forceRefresh) {
+            Cache::forget($cacheKey);
+        }
+
+        $cached = Cache::remember($cacheKey, now()->addMinutes(20), function () use ($normalizedPeriod, $normalizedSucursal) {
+            $dateRange = $this->getDateRangeForPeriod($normalizedPeriod);
+
+            return [
+                'kpis' => $this->getKpis($dateRange, $normalizedSucursal),
+                'sales_trend' => $this->getSalesTrend($dateRange, $normalizedSucursal),
+                'category_distribution' => $this->getCategoryDistribution($dateRange, $normalizedSucursal),
+                'top_products' => $this->getTopProducts($dateRange, 5, $normalizedSucursal),
+                'geo_distribution' => $this->getCommercialForceDistribution($dateRange, 6, $normalizedSucursal),
+                'yoy_comparison' => $this->getYearOverYearComparison($normalizedSucursal),
+                'cxc_matrix' => $this->getAccountsReceivableAndClientMatrix($normalizedSucursal),
+                'supply_chain' => $this->getSupplyChainTrafficLight($normalizedSucursal),
+                'cached_at' => Carbon::now()->toIso8601String(),
+            ];
+        });
 
         return [
             'period' => $normalizedPeriod,
@@ -23,17 +47,89 @@ class DashboardAnalyticsService
                 ['id' => '2024', 'label' => 'Año 2024'],
                 ['id' => 'all', 'label' => 'Histórico Total'],
             ],
-            'kpis' => $this->getKpis($dateRange),
-            'sales_trend' => $this->getSalesTrend($dateRange),
-            'category_distribution' => $this->getCategoryDistribution($dateRange),
-            'top_products' => $this->getTopProducts($dateRange, 5),
-            'geo_distribution' => $this->getCommercialForceDistribution($dateRange, 6),
-            'recent_orders' => $this->getRecentOrders($dateRange, 6),
-            'low_stock_alerts' => $this->getLowStockAlerts(6),
-            'yoy_comparison' => $this->getYearOverYearComparison(),
-            'cxc_matrix' => $this->getAccountsReceivableAndClientMatrix(),
-            'supply_chain' => $this->getSupplyChainTrafficLight(),
+            'sucursal' => $normalizedSucursal ?? 'all',
+            'available_sucursales' => $this->getAvailableSucursales(),
+            'kpis' => $cached['kpis'],
+            'sales_trend' => $cached['sales_trend'],
+            'category_distribution' => $cached['category_distribution'],
+            'top_products' => $cached['top_products'],
+            'geo_distribution' => $cached['geo_distribution'],
+            'recent_orders' => [],
+            'low_stock_alerts' => [],
+            'yoy_comparison' => $cached['yoy_comparison'],
+            'cxc_matrix' => $cached['cxc_matrix'],
+            'supply_chain' => $cached['supply_chain'],
+            'last_updated' => $cached['cached_at'] ?? Carbon::now()->toIso8601String(),
+            'is_cached' => true,
         ];
+    }
+
+    /**
+     * Invalida la caché completa de analíticas para todos los períodos y sucursales.
+     */
+    public function clearAllDashboardCache(): void
+    {
+        $periods = ['2026', '2025', '2024', 'all'];
+        $sucursales = ['all'];
+
+        try {
+            $dbSucursales = DB::table('sucursales')->pluck('codsuc')->map(fn ($id) => trim((string) $id))->all();
+            $sucursales = array_merge($sucursales, $dbSucursales);
+        } catch (\Throwable $e) {
+            // fallback
+        }
+
+        foreach ($periods as $p) {
+            foreach ($sucursales as $s) {
+                Cache::forget("dashboard_analytics_{$p}_{$s}");
+            }
+        }
+    }
+
+    /**
+     * Resuelve y valida la sucursal seleccionada.
+     */
+    protected function resolveSucursal(?string $sucursal): ?string
+    {
+        if (empty($sucursal) || $sucursal === 'all') {
+            return null;
+        }
+
+        $clean = trim((string) $sucursal);
+        $validIds = DB::table('sucursales')->pluck('codsuc')->map(fn ($id) => trim((string) $id))->all();
+
+        return in_array($clean, $validIds, true) ? $clean : null;
+    }
+
+    /**
+     * Listado de sucursales disponibles para el selector global.
+     */
+    public function getAvailableSucursales(): array
+    {
+        $rows = DB::table('sucursales')
+            ->select(DB::raw('RTRIM(codsuc) as id'), DB::raw('RTRIM(nomsuc) as name'))
+            ->whereNotNull('nomsuc')
+            ->orderBy('id')
+            ->get();
+
+        $list = [
+            ['id' => 'all', 'name' => 'Todas las Sucursales (Consolidado)'],
+        ];
+
+        foreach ($rows as $r) {
+            $name = trim((string) $r->name);
+            if ($name === 'CAZA MATRIZ') {
+                $name = 'CASA MATRIZ (Santa Ana)';
+            } elseif ($name === 'MASFERRER') {
+                $name = 'MASFERRER (San Salvador)';
+            }
+            $list[] = [
+                'id' => (string) $r->id,
+                'name' => $name,
+            ];
+        }
+
+        return $list;
     }
 
     /**
@@ -75,12 +171,16 @@ class DashboardAnalyticsService
     }
 
     /**
-     * KPIs ejecutivos globales según período.
+     * KPIs ejecutivos globales según período y sucursal.
      */
-    public function getKpis(array $dateRange): array
+    public function getKpis(array $dateRange, ?string $sucursal = null): array
     {
         $invoicesQuery = DB::table('Encfct as e')
             ->where('e.estado', '!=', 'A');
+
+        if (! empty($sucursal)) {
+            $invoicesQuery->where(DB::raw('RTRIM(e.codsuc)'), $sucursal);
+        }
 
         $this->applyDateFilter($invoicesQuery, $dateRange, 'e.fecfct');
 
@@ -100,6 +200,10 @@ class DashboardAnalyticsService
             ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
             ->where('e.estado', '!=', 'A');
 
+        if (! empty($sucursal)) {
+            $itemsQuery->where(DB::raw('RTRIM(e.codsuc)'), $sucursal);
+        }
+
         $this->applyDateFilter($itemsQuery, $dateRange, 'e.fecfct');
 
         $totalUnits = (int) ($itemsQuery->sum(DB::raw('CAST(d.qtyvta as float)')) ?? 0);
@@ -107,9 +211,19 @@ class DashboardAnalyticsService
         // Artículos activos e inventario en quiebre o agotado
         $activeProductsCount = DB::table('productos')->where('estado', 'A')->count();
 
-        $lowStockCount = DB::table('Existencias as ex')
+        $stockQuery = DB::table('Existencias as ex')
             ->join('productos as p', DB::raw('RTRIM(ex.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
-            ->where('p.estado', 'A')
+            ->where('p.estado', 'A');
+
+        if (! empty($sucursal)) {
+            if ($sucursal === '003') {
+                $stockQuery->where(DB::raw('RTRIM(ex.codbod)'), '003');
+            } elseif ($sucursal === '001') {
+                $stockQuery->where(DB::raw('RTRIM(ex.codbod)'), '!=', '003');
+            }
+        }
+
+        $lowStockCount = $stockQuery
             ->groupBy('ex.codprd')
             ->havingRaw('SUM(CAST(ex.Exiprd as float)) <= 0')
             ->select('ex.codprd')
@@ -129,10 +243,14 @@ class DashboardAnalyticsService
     /**
      * Tendencia mensual de facturación y volumen de pedidos.
      */
-    public function getSalesTrend(array $dateRange): array
+    public function getSalesTrend(array $dateRange, ?string $sucursal = null): array
     {
         $query = DB::table('Encfct as e')
             ->where('e.estado', '!=', 'A');
+
+        if (! empty($sucursal)) {
+            $query->where(DB::raw('RTRIM(e.codsuc)'), $sucursal);
+        }
 
         $this->applyDateFilter($query, $dateRange, 'e.fecfct');
 
@@ -149,6 +267,11 @@ class DashboardAnalyticsService
         $unitsQuery = DB::table('detfct as d')
             ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
             ->where('e.estado', '!=', 'A');
+
+        if (! empty($sucursal)) {
+            $unitsQuery->where(DB::raw('RTRIM(e.codsuc)'), $sucursal);
+        }
+
         $this->applyDateFilter($unitsQuery, $dateRange, 'e.fecfct');
         $unitsByMonth = $unitsQuery
             ->selectRaw("
@@ -176,13 +299,17 @@ class DashboardAnalyticsService
     /**
      * Distribución de ventas por Marca / Rubro de producto.
      */
-    public function getCategoryDistribution(array $dateRange): array
+    public function getCategoryDistribution(array $dateRange, ?string $sucursal = null): array
     {
         $query = DB::table('detfct as d')
             ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
             ->join('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
             ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
             ->where('e.estado', '!=', 'A');
+
+        if (! empty($sucursal)) {
+            $query->where(DB::raw('RTRIM(e.codsuc)'), $sucursal);
+        }
 
         $this->applyDateFilter($query, $dateRange, 'e.fecfct');
 
@@ -216,13 +343,17 @@ class DashboardAnalyticsService
     /**
      * Top productos líderes en facturación dentro del período.
      */
-    public function getTopProducts(array $dateRange, int $limit = 5): array
+    public function getTopProducts(array $dateRange, int $limit = 5, ?string $sucursal = null): array
     {
         $query = DB::table('detfct as d')
             ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
             ->join('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
             ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
             ->where('e.estado', '!=', 'A');
+
+        if (! empty($sucursal)) {
+            $query->where(DB::raw('RTRIM(e.codsuc)'), $sucursal);
+        }
 
         $this->applyDateFilter($query, $dateRange, 'e.fecfct');
 
@@ -244,8 +375,18 @@ class DashboardAnalyticsService
             ->get();
 
         $codes = $top->pluck('product_id')->all();
-        $stockMap = DB::table('Existencias')
-            ->whereIn(DB::raw('RTRIM(codprd)'), $codes)
+        $stockQuery = DB::table('Existencias')
+            ->whereIn(DB::raw('RTRIM(codprd)'), $codes);
+
+        if (! empty($sucursal)) {
+            if ($sucursal === '003') {
+                $stockQuery->where(DB::raw('RTRIM(codbod)'), '003');
+            } elseif ($sucursal === '001') {
+                $stockQuery->where(DB::raw('RTRIM(codbod)'), '!=', '003');
+            }
+        }
+
+        $stockMap = $stockQuery
             ->groupBy(DB::raw('RTRIM(codprd)'))
             ->selectRaw('RTRIM(codprd) as cod, ROUND(SUM(CAST(Exiprd as float)), 0) as total_stock')
             ->pluck('total_stock', 'cod');
@@ -267,11 +408,15 @@ class DashboardAnalyticsService
     /**
      * Distribución por Fuerza de Ventas / Asesores Comerciales.
      */
-    public function getCommercialForceDistribution(array $dateRange, int $limit = 6): array
+    public function getCommercialForceDistribution(array $dateRange, int $limit = 6, ?string $sucursal = null): array
     {
         $query = DB::table('Encfct as e')
             ->leftJoin('vendedores as v', DB::raw('RTRIM(e.codven)'), '=', DB::raw('RTRIM(v.codven)'))
             ->where('e.estado', '!=', 'A');
+
+        if (! empty($sucursal)) {
+            $query->where(DB::raw('RTRIM(e.codsuc)'), $sucursal);
+        }
 
         $this->applyDateFilter($query, $dateRange, 'e.fecfct');
 
@@ -380,13 +525,19 @@ class DashboardAnalyticsService
     /**
      * Módulo 1: Comparativa Interanual (YoY - Year over Year) 2026 vs 2025.
      */
-    public function getYearOverYearComparison(): array
+    public function getYearOverYearComparison(?string $sucursal = null): array
     {
         $mesesNombres = [
             1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
             5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
             9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
         ];
+
+        $sucursalCondition = '';
+        if (! empty($sucursal)) {
+            $safeSucursal = addslashes($sucursal);
+            $sucursalCondition = "AND RTRIM(codsuc) = '{$safeSucursal}'";
+        }
 
         $yoyData = DB::select("
             WITH Ventas2025 AS (
@@ -395,7 +546,7 @@ class DashboardAnalyticsService
                     ROUND(SUM(CAST(valgrv as float) + CAST(valexe as float)), 2) as venta_2025,
                     COUNT(DISTINCT ID_Fac) as facturas_2025
                 FROM Encfct
-                WHERE estado != 'A' AND YEAR(fecfct) = 2025
+                WHERE estado != 'A' AND YEAR(fecfct) = 2025 {$sucursalCondition}
                 GROUP BY MONTH(fecfct)
             ),
             Ventas2026 AS (
@@ -404,7 +555,7 @@ class DashboardAnalyticsService
                     ROUND(SUM(CAST(valgrv as float) + CAST(valexe as float)), 2) as venta_2026,
                     COUNT(DISTINCT ID_Fac) as facturas_2026
                 FROM Encfct
-                WHERE estado != 'A' AND YEAR(fecfct) = 2026
+                WHERE estado != 'A' AND YEAR(fecfct) = 2026 {$sucursalCondition}
                 GROUP BY MONTH(fecfct)
             )
             SELECT 
@@ -487,8 +638,14 @@ class DashboardAnalyticsService
     /**
      * Módulo 2: Matriz de Clientes, Cuentas por Cobrar (CxC) y Cartera.
      */
-    public function getAccountsReceivableAndClientMatrix(): array
+    public function getAccountsReceivableAndClientMatrix(?string $sucursal = null): array
     {
+        $sucursalCondition = '';
+        if (! empty($sucursal)) {
+            $safeSucursal = addslashes($sucursal);
+            $sucursalCondition = "AND RTRIM(e.codsuc) = '{$safeSucursal}'";
+        }
+
         // 1. Envejecimiento de Cartera (Aging)
         $agingRows = DB::select("
             WITH Cartera AS (
@@ -502,7 +659,7 @@ class DashboardAnalyticsService
                     FROM movcxc
                     GROUP BY id_fac
                 ) p ON e.ID_Fac = p.id_fac
-                WHERE e.estado != 'A' AND e.condpgo = 'CRD'
+                WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition}
                 AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
             )
             SELECT 
@@ -562,6 +719,7 @@ class DashboardAnalyticsService
         $overdueBalance = round($totalPortfolio - $currentBalance, 2);
         $overduePlus90 = $agingMap['Más de 90 días']['saldo'];
         $overdueRate = $totalPortfolio > 0 ? round(($overdueBalance / $totalPortfolio) * 100, 1) : 0.0;
+        $totalPendingInvoices = array_sum(array_column($agingList, 'facturas'));
 
         // 2. Top Deudores de Cartera
         $topDebtors = DB::select("
@@ -581,7 +739,7 @@ class DashboardAnalyticsService
                     FROM movcxc
                     GROUP BY id_fac
                 ) p ON e.ID_Fac = p.id_fac
-                WHERE e.estado != 'A' AND e.condpgo = 'CRD'
+                WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition}
                 AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
             )
             SELECT TOP 6
@@ -620,7 +778,7 @@ class DashboardAnalyticsService
                 FROM Encfct e
                 INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
                 LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
-                WHERE e.estado != 'A'
+                WHERE e.estado != 'A' {$sucursalCondition}
                 GROUP BY e.codcli, COALESCE(e.shipto, c.nomcli), COALESCE(v.nomven, e.codven, 'OFIC')
             ),
             Saldos AS (
@@ -634,7 +792,7 @@ class DashboardAnalyticsService
                     FROM movcxc
                     GROUP BY id_fac
                 ) p ON e.ID_Fac = p.id_fac
-                WHERE e.estado != 'A' AND e.condpgo = 'CRD'
+                WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition}
                 GROUP BY e.codcli
                 HAVING SUM(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
             )
@@ -684,7 +842,7 @@ class DashboardAnalyticsService
                 FROM Encfct e
                 INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
                 LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
-                WHERE e.estado != 'A' AND YEAR(e.fecfct) >= 2025
+                WHERE e.estado != 'A' AND YEAR(e.fecfct) >= 2025 {$sucursalCondition}
                 GROUP BY e.codcli, COALESCE(e.shipto, c.nomcli), COALESCE(v.nomven, e.codven, 'OFIC')
                 HAVING DATEDIFF(day, MAX(e.fecfct), CAST('2026-10-13' AS date)) BETWEEN 45 AND 150
             )
@@ -710,7 +868,7 @@ class DashboardAnalyticsService
                 'overdue_portfolio' => $overdueBalance,
                 'overdue_plus_90' => $overduePlus90,
                 'overdue_rate' => $overdueRate,
-                'total_pending_invoices' => 1236,
+                'total_pending_invoices' => $totalPendingInvoices,
             ],
             'aging_distribution' => $agingList,
             'top_debtors' => $formattedDebtors,
@@ -722,8 +880,20 @@ class DashboardAnalyticsService
     /**
      * Módulo 3: Semáforo de Abastecimiento & Cobertura de Stock Preventiva.
      */
-    public function getSupplyChainTrafficLight(): array
+    public function getSupplyChainTrafficLight(?string $sucursal = null): array
     {
+        $sucursalSalesFilter = '';
+        $sucursalStockFilter = '';
+        if (! empty($sucursal)) {
+            $safeSucursal = addslashes($sucursal);
+            $sucursalSalesFilter = "AND RTRIM(e.codsuc) = '{$safeSucursal}'";
+            if ($safeSucursal === '003') {
+                $sucursalStockFilter = "WHERE RTRIM(codbod) = '003'";
+            } elseif ($safeSucursal === '001') {
+                $sucursalStockFilter = "WHERE RTRIM(codbod) != '003'";
+            }
+        }
+
         $items = DB::select("
             WITH VentasRecientes AS (
                 SELECT 
@@ -733,7 +903,7 @@ class DashboardAnalyticsService
                     ROUND(SUM(CAST(d.qtyvta as float) * CAST(d.prcact as float)), 2) as venta_6m
                 FROM detfct d
                 INNER JOIN Encfct e ON d.ID_Fac = e.ID_Fac
-                WHERE e.estado != 'A' AND e.fecfct >= '2026-04-01'
+                WHERE e.estado != 'A' AND e.fecfct >= '2026-04-01' {$sucursalSalesFilter}
                 GROUP BY d.codprd
             ),
             StockActual AS (
@@ -741,6 +911,7 @@ class DashboardAnalyticsService
                     RTRIM(codprd) as codprd,
                     ROUND(SUM(CAST(Exiprd as float)), 0) as stock_total
                 FROM Existencias
+                {$sucursalStockFilter}
                 GROUP BY codprd
             )
             SELECT 

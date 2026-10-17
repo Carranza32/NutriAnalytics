@@ -337,12 +337,6 @@ export default function ReportsIndex({
                 {/* Header Superior estilo Apple */}
                 <header className="flex flex-col justify-between gap-4 border-b border-black/[0.06] pb-5 lg:flex-row lg:items-center dark:border-white/[0.06]">
                     <div>
-                        <div className="flex items-center gap-2">
-                            <span className="inline-flex size-2 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-xs font-semibold tracking-wider text-emerald-600 uppercase dark:text-emerald-400">
-                                Reemplazo de Crystal Reports • GeoSoft Engine
-                            </span>
-                        </div>
                         <h1 className="mt-1 text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl dark:text-neutral-50">
                             Centro de Reportería Inteligente
                         </h1>
@@ -592,15 +586,3 @@ export default function ReportsIndex({
     );
 }
 
-ReportsIndex.layout = {
-    breadcrumbs: [
-        {
-            title: 'Dashboard',
-            href: dashboard(),
-        },
-        {
-            title: 'Centro de Reportería',
-            href: reports.index(),
-        },
-    ],
-};
