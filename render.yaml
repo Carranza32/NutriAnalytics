@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: nutrianalytics
+    runtime: docker
+    region: ohio
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: APP_NAME
+        value: NutriAnalytics
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        value: base64:tYv7xRk11C7Y2qy69UxVhQteUDj1I84kTKQCVcC9Rmk=
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        value: aws-0-us-east-1.pooler.supabase.com
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_DATABASE
+        value: postgres
+      - key: DB_USERNAME
+        value: postgres.jrvsctjbacuhsibrahkj
+      - key: DB_PASSWORD
+        value: iSJTdPh9fUIO2pKz
+      - key: DB_SSLMODE
+        value: require
+      - key: SESSION_DRIVER
+        value: file
+      - key: CACHE_STORE
+        value: file
