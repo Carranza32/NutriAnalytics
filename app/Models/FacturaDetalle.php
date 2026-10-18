@@ -19,7 +19,7 @@ class FacturaDetalle extends Model
 
     protected $fillable = [
         'CodEmp',
-        'ID_Fac',
+        'id_fac',
         'tipfct',
         'numfct',
         'fecfct',
@@ -42,7 +42,7 @@ class FacturaDetalle extends Model
 
     public function factura(): BelongsTo
     {
-        return $this->belongsTo(Factura::class, 'ID_Fac', 'ID_Fac');
+        return $this->belongsTo(Factura::class, 'id_fac', 'id_fac');
     }
 
     public function producto(): BelongsTo

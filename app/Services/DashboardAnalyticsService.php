@@ -186,7 +186,7 @@ class DashboardAnalyticsService
 
         $invoiceMetrics = (clone $invoicesQuery)
             ->selectRaw('
-                COUNT(DISTINCT e.ID_Fac) as total_invoices,
+                COUNT(DISTINCT e.id_fac) as total_invoices,
                 ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as total_revenue
             ')
             ->first();
@@ -197,7 +197,7 @@ class DashboardAnalyticsService
 
         // Unidades vendidas en el período
         $itemsQuery = DB::table('detfct as d')
-            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.id_fac', '=', 'e.id_fac')
             ->where('e.estado', '!=', 'A');
 
         if (! empty($sucursal)) {
@@ -225,7 +225,7 @@ class DashboardAnalyticsService
 
         $lowStockCount = $stockQuery
             ->groupBy('ex.codprd')
-            ->havingRaw('SUM(CAST(ex.Exiprd as float)) <= 0')
+            ->havingRaw('SUM(CAST(ex.exiprd as float)) <= 0')
             ->select('ex.codprd')
             ->get()
             ->count();
@@ -254,18 +254,21 @@ class DashboardAnalyticsService
 
         $this->applyDateFilter($query, $dateRange, 'e.fecfct');
 
+        $isPgsql = DB::connection()->getDriverName() === 'pgsql';
+        $monthExpr = $isPgsql ? "to_char(e.fecfct, 'YYYY-MM')" : "FORMAT(e.fecfct, 'yyyy-MM')";
+
         $results = $query
             ->selectRaw("
-                FORMAT(e.fecfct, 'yyyy-MM') as month_key,
+                {$monthExpr} as month_key,
                 ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as revenue,
-                COUNT(DISTINCT e.ID_Fac) as orders_count
+                COUNT(DISTINCT e.id_fac) as orders_count
             ")
-            ->groupBy(DB::raw("FORMAT(e.fecfct, 'yyyy-MM')"))
+            ->groupBy(DB::raw($monthExpr))
             ->orderBy('month_key', 'asc')
             ->get();
 
         $unitsQuery = DB::table('detfct as d')
-            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.id_fac', '=', 'e.id_fac')
             ->where('e.estado', '!=', 'A');
 
         if (! empty($sucursal)) {
@@ -275,10 +278,10 @@ class DashboardAnalyticsService
         $this->applyDateFilter($unitsQuery, $dateRange, 'e.fecfct');
         $unitsByMonth = $unitsQuery
             ->selectRaw("
-                FORMAT(e.fecfct, 'yyyy-MM') as month_key,
+                {$monthExpr} as month_key,
                 ROUND(SUM(CAST(d.qtyvta as float)), 0) as units_sold
             ")
-            ->groupBy(DB::raw("FORMAT(e.fecfct, 'yyyy-MM')"))
+            ->groupBy(DB::raw($monthExpr))
             ->pluck('units_sold', 'month_key');
 
         return $results->map(function ($item) use ($unitsByMonth) {
@@ -302,7 +305,7 @@ class DashboardAnalyticsService
     public function getCategoryDistribution(array $dateRange, ?string $sucursal = null): array
     {
         $query = DB::table('detfct as d')
-            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.id_fac', '=', 'e.id_fac')
             ->join('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
             ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
             ->where('e.estado', '!=', 'A');
@@ -346,7 +349,7 @@ class DashboardAnalyticsService
     public function getTopProducts(array $dateRange, int $limit = 5, ?string $sucursal = null): array
     {
         $query = DB::table('detfct as d')
-            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.id_fac', '=', 'e.id_fac')
             ->join('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
             ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
             ->where('e.estado', '!=', 'A');
@@ -388,7 +391,7 @@ class DashboardAnalyticsService
 
         $stockMap = $stockQuery
             ->groupBy(DB::raw('RTRIM(codprd)'))
-            ->selectRaw('RTRIM(codprd) as cod, ROUND(SUM(CAST(Exiprd as float)), 0) as total_stock')
+            ->selectRaw('RTRIM(codprd) as cod, ROUND(SUM(CAST(exiprd as float)), 0) as total_stock')
             ->pluck('total_stock', 'cod');
 
         return $top->map(function ($p) use ($stockMap) {
@@ -424,7 +427,7 @@ class DashboardAnalyticsService
             ->selectRaw('
                 RTRIM(COALESCE(v.nomven, e.codven, \'OFICINA\')) as country,
                 ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as revenue,
-                COUNT(DISTINCT e.ID_Fac) as orders_count
+                COUNT(DISTINCT e.id_fac) as orders_count
             ')
             ->groupBy(DB::raw('RTRIM(COALESCE(v.nomven, e.codven, \'OFICINA\'))'))
             ->orderByDesc('revenue')
@@ -452,7 +455,7 @@ class DashboardAnalyticsService
 
         $invoices = $query
             ->selectRaw('
-                e.ID_Fac,
+                e.id_fac,
                 RTRIM(e.numfct) as numfct,
                 RTRIM(e.tipfct) as tipfct,
                 RTRIM(COALESCE(e.shipto, \'Cliente\')) as customer_name,
@@ -464,12 +467,12 @@ class DashboardAnalyticsService
             ->take($limit)
             ->get();
 
-        $ids = $invoices->pluck('ID_Fac')->all();
+        $ids = $invoices->pluck('id_fac')->all();
         $linesCount = DB::table('detfct')
-            ->whereIn('ID_Fac', $ids)
-            ->groupBy('ID_Fac')
-            ->selectRaw('ID_Fac, COUNT(*) as cant')
-            ->pluck('cant', 'ID_Fac');
+            ->whereIn('id_fac', $ids)
+            ->groupBy('id_fac')
+            ->selectRaw('id_fac, COUNT(*) as cant')
+            ->pluck('cant', 'id_fac');
 
         return $invoices->map(function ($inv) use ($linesCount) {
             $carbon = Carbon::parse($inv->fecfct);
@@ -480,7 +483,7 @@ class DashboardAnalyticsService
                 'customer_id' => (string) $inv->customer_name,
                 'order_date' => $carbon->format('d/m/Y'),
                 'ship_country' => "{$tipo} • {$inv->seller_name}",
-                'items_count' => (int) ($linesCount[$inv->ID_Fac] ?? 1),
+                'items_count' => (int) ($linesCount[$inv->id_fac] ?? 1),
                 'total_amount' => (float) $inv->total_amount,
             ];
         })->values()->all();
@@ -500,12 +503,12 @@ class DashboardAnalyticsService
                 DB::raw('RTRIM(p.nomprd)'),
                 DB::raw('RTRIM(COALESCE(r.nomrub, \'General\'))')
             )
-            ->havingRaw('SUM(CAST(ex.Exiprd as float)) <= 0')
+            ->havingRaw('SUM(CAST(ex.exiprd as float)) <= 0')
             ->selectRaw('
                 RTRIM(p.codprd) as product_id,
                 RTRIM(p.nomprd) as product_name,
                 RTRIM(COALESCE(r.nomrub, \'General\')) as category_name,
-                ROUND(SUM(CAST(ex.Exiprd as float)), 0) as units_in_stock
+                ROUND(SUM(CAST(ex.exiprd as float)), 0) as units_in_stock
             ')
             ->orderBy('units_in_stock', 'asc')
             ->take($limit)
@@ -544,7 +547,7 @@ class DashboardAnalyticsService
                 SELECT 
                     MONTH(fecfct) as mes_num,
                     ROUND(SUM(CAST(valgrv as float) + CAST(valexe as float)), 2) as venta_2025,
-                    COUNT(DISTINCT ID_Fac) as facturas_2025
+                    COUNT(DISTINCT id_fac) as facturas_2025
                 FROM encfct
                 WHERE estado != 'A' AND YEAR(fecfct) = 2025 {$sucursalCondition}
                 GROUP BY MONTH(fecfct)
@@ -553,7 +556,7 @@ class DashboardAnalyticsService
                 SELECT 
                     MONTH(fecfct) as mes_num,
                     ROUND(SUM(CAST(valgrv as float) + CAST(valexe as float)), 2) as venta_2026,
-                    COUNT(DISTINCT ID_Fac) as facturas_2026
+                    COUNT(DISTINCT id_fac) as facturas_2026
                 FROM encfct
                 WHERE estado != 'A' AND YEAR(fecfct) = 2026 {$sucursalCondition}
                 GROUP BY MONTH(fecfct)
@@ -646,19 +649,27 @@ class DashboardAnalyticsService
             $sucursalCondition = "AND RTRIM(e.codsuc) = '{$safeSucursal}'";
         }
 
+        $isPgsql = DB::connection()->getDriverName() === 'pgsql';
+        $diffVen = $isPgsql ? "(CAST('2026-10-13' AS date) - CAST(e.fecven AS date))" : "DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date))";
+        $diffFct = $isPgsql ? "(CAST('2026-10-13' AS date) - CAST(MAX(e.fecfct) AS date))" : "DATEDIFF(day, MAX(e.fecfct), CAST('2026-10-13' AS date))";
+        $top6Select = $isPgsql ? 'SELECT' : 'SELECT TOP 6';
+        $limit6 = $isPgsql ? 'LIMIT 6' : '';
+        $top5Select = $isPgsql ? 'SELECT' : 'SELECT TOP 5';
+        $limit5 = $isPgsql ? 'LIMIT 5' : '';
+
         // 1. Envejecimiento de Cartera (Aging)
         $agingRows = DB::select("
             WITH Cartera AS (
                 SELECT 
-                    e.ID_Fac,
-                    DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
+                    e.id_fac,
+                    {$diffVen} as dias_mora,
                     ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0), 2) as saldo
                 FROM encfct e
                 LEFT JOIN (
                     SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
                     FROM movcxc
                     GROUP BY id_fac
-                ) p ON e.ID_Fac = p.id_fac
+                ) p ON e.id_fac = p.id_fac
                 WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition}
                 AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)) > 0.05
             )
@@ -725,11 +736,11 @@ class DashboardAnalyticsService
         $topDebtors = DB::select("
             WITH Cartera AS (
                 SELECT 
-                    e.ID_Fac,
+                    e.id_fac,
                     RTRIM(e.codcli) as codcli,
                     RTRIM(COALESCE(e.shipto, c.nomcli)) as nomcli,
                     RTRIM(COALESCE(v.nomven, e.codven, 'OFIC')) as nomven,
-                    DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
+                    {$diffVen} as dias_mora,
                     ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0), 2) as saldo
                 FROM encfct e
                 INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
@@ -738,11 +749,11 @@ class DashboardAnalyticsService
                     SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
                     FROM movcxc
                     GROUP BY id_fac
-                ) p ON e.ID_Fac = p.id_fac
+                ) p ON e.id_fac = p.id_fac
                 WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition}
                 AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)) > 0.05
             )
-            SELECT TOP 6
+            {$top6Select}
                 codcli,
                 nomcli,
                 nomven,
@@ -752,6 +763,7 @@ class DashboardAnalyticsService
             FROM Cartera
             GROUP BY codcli, nomcli, nomven
             ORDER BY saldo_total DESC
+            {$limit6}
         ");
 
         $formattedDebtors = array_map(fn ($d) => [
@@ -772,8 +784,8 @@ class DashboardAnalyticsService
                     RTRIM(COALESCE(e.shipto, c.nomcli)) as nomcli,
                     RTRIM(COALESCE(v.nomven, e.codven, 'OFIC')) as nomven,
                     MAX(e.fecfct) as ultima_compra,
-                    DATEDIFF(day, MAX(e.fecfct), CAST('2026-10-13' AS date)) as dias_sin_comprar,
-                    COUNT(DISTINCT e.ID_Fac) as total_facturas,
+                    {$diffFct} as dias_sin_comprar,
+                    COUNT(DISTINCT e.id_fac) as total_facturas,
                     ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as compras_totales
                 FROM encfct e
                 INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
@@ -785,18 +797,18 @@ class DashboardAnalyticsService
                 SELECT 
                     RTRIM(e.codcli) as codcli,
                     ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)), 2) as saldo_deuda,
-                    MAX(DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date))) as max_mora
+                    MAX({$diffVen}) as max_mora
                 FROM encfct e
                 LEFT JOIN (
                     SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
                     FROM movcxc
                     GROUP BY id_fac
-                ) p ON e.ID_Fac = p.id_fac
+                ) p ON e.id_fac = p.id_fac
                 WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition}
                 GROUP BY e.codcli
                 HAVING SUM(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)) > 0.05
             )
-            SELECT TOP 6
+            {$top6Select}
                 cs.codcli,
                 cs.nomcli,
                 cs.nomven,
@@ -809,6 +821,7 @@ class DashboardAnalyticsService
             FROM ClientesStats cs
             LEFT JOIN Saldos s ON cs.codcli = s.codcli
             ORDER BY cs.compras_totales DESC
+            {$limit6}
         ");
 
         $formattedTopClients = array_map(function ($c) {
@@ -836,19 +849,20 @@ class DashboardAnalyticsService
                     RTRIM(COALESCE(e.shipto, c.nomcli)) as nomcli,
                     RTRIM(COALESCE(v.nomven, e.codven, 'OFIC')) as nomven,
                     MAX(e.fecfct) as ultima_compra,
-                    DATEDIFF(day, MAX(e.fecfct), CAST('2026-10-13' AS date)) as dias_sin_comprar,
+                    {$diffFct} as dias_sin_comprar,
                     ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as compras_totales,
-                    COUNT(DISTINCT e.ID_Fac) as facturas_total
+                    COUNT(DISTINCT e.id_fac) as facturas_total
                 FROM encfct e
                 INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
                 LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
                 WHERE e.estado != 'A' AND YEAR(e.fecfct) >= 2025 {$sucursalCondition}
                 GROUP BY e.codcli, COALESCE(e.shipto, c.nomcli), COALESCE(v.nomven, e.codven, 'OFIC')
-                HAVING DATEDIFF(day, MAX(e.fecfct), CAST('2026-10-13' AS date)) BETWEEN 45 AND 150
+                HAVING {$diffFct} BETWEEN 45 AND 150
             )
-            SELECT TOP 5 *
+            {$top5Select} *
             FROM ClientesRecientes
             ORDER BY compras_totales DESC
+            {$limit5}
         ");
 
         $formattedChurnRisk = array_map(fn ($cr) => [
@@ -902,14 +916,14 @@ class DashboardAnalyticsService
                     ROUND(SUM(CAST(d.qtyvta as float)) / 6.0, 1) as consumo_mensual,
                     ROUND(SUM(CAST(d.qtyvta as float) * CAST(d.prcact as float)), 2) as venta_6m
                 FROM detfct d
-                INNER JOIN encfct e ON d.ID_Fac = e.ID_Fac
+                INNER JOIN encfct e ON d.id_fac = e.id_fac
                 WHERE e.estado != 'A' AND e.fecfct >= '2026-04-01' {$sucursalSalesFilter}
                 GROUP BY d.codprd
             ),
             StockActual AS (
                 SELECT 
                     RTRIM(codprd) as codprd,
-                    ROUND(SUM(CAST(Exiprd as float)), 0) as stock_total
+                    ROUND(SUM(CAST(exiprd as float)), 0) as stock_total
                 FROM existencias
                 {$sucursalStockFilter}
                 GROUP BY codprd

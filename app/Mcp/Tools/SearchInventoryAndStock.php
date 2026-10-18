@@ -105,7 +105,7 @@ class SearchInventoryAndStock extends Tool
         $stockRows = $stockQuery->select(
             DB::raw('RTRIM(codprd) as codprd'),
             DB::raw('RTRIM(codbod) as codbod'),
-            DB::raw('SUM(CAST(Exiprd as float)) as stock')
+            DB::raw('SUM(CAST(exiprd as float)) as stock')
         )
             ->groupBy(DB::raw('RTRIM(codprd)'), DB::raw('RTRIM(codbod)'))
             ->get();

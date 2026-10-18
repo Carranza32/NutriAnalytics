@@ -75,7 +75,7 @@ class GetExecutiveKpis extends Tool
 
         $invTotals = (clone $invQuery)
             ->selectRaw('
-                COUNT(DISTINCT e.ID_Fac) as total_invoices,
+                COUNT(DISTINCT e.id_fac) as total_invoices,
                 ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as total_revenue
             ')
             ->first();
@@ -86,7 +86,7 @@ class GetExecutiveKpis extends Tool
 
         // Unidades despachadas
         $unitsQuery = DB::table('detfct as d')
-            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.id_fac', '=', 'e.id_fac')
             ->where('e.estado', '!=', 'A')
             ->whereBetween('e.fecfct', [$dateFrom, $dateTo]);
 

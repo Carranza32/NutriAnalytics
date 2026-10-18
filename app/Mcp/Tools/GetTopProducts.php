@@ -56,7 +56,7 @@ class GetTopProducts extends Tool
         $limit = (int) ($validated['limit'] ?? 10);
 
         $q = DB::table('detfct as d')
-            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.id_fac', '=', 'e.id_fac')
             ->leftJoin('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
             ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
             ->where('e.estado', '!=', 'A')
@@ -100,7 +100,7 @@ class GetTopProducts extends Tool
 
         $stockMap = $stockQuery->select(
             DB::raw('RTRIM(codprd) as codprd'),
-            DB::raw('SUM(CAST(Exiprd as float)) as stock')
+            DB::raw('SUM(CAST(exiprd as float)) as stock')
         )
             ->groupBy(DB::raw('RTRIM(codprd)'))
             ->pluck('stock', 'codprd');

@@ -57,21 +57,24 @@ class GetAccountsReceivable extends Tool
             $sucursalCondition = "AND RTRIM(e.codsuc) = '{$safeSucursal}'";
         }
 
+        $isPgsql = DB::connection()->getDriverName() === 'pgsql';
+        $diffVen = $isPgsql ? "(CAST('2026-10-13' AS date) - CAST(e.fecven AS date))" : "DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date))";
+
         // Tramos de antigüedad (Aging)
         $agingRows = DB::select("
             WITH Cartera AS (
                 SELECT 
-                    e.ID_Fac,
-                    DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
-                    ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0), 2) as saldo
+                    e.id_fac,
+                    {$diffVen} as dias_mora,
+                    ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0), 2) as saldo
                 FROM encfct e
                 LEFT JOIN (
                     SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
                     FROM movcxc
                     GROUP BY id_fac
-                ) p ON e.ID_Fac = p.id_fac
+                ) p ON e.id_fac = p.id_fac
                 WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition}
-                AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
+                AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)) > 0.05
             )
             SELECT 
                 CASE 
@@ -124,12 +127,12 @@ class GetAccountsReceivable extends Tool
         $debtorRows = DB::select("
             WITH Cartera AS (
                 SELECT 
-                    e.ID_Fac,
+                    e.id_fac,
                     RTRIM(e.codcli) as codcli,
                     RTRIM(COALESCE(e.shipto, c.nomcli)) as nomcli,
                     RTRIM(COALESCE(v.nomven, e.codven, 'OFICINA')) as nomven,
-                    DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
-                    ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0), 2) as saldo
+                    {$diffVen} as dias_mora,
+                    ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0), 2) as saldo
                 FROM encfct e
                 LEFT JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
                 LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
@@ -137,15 +140,15 @@ class GetAccountsReceivable extends Tool
                     SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
                     FROM movcxc
                     GROUP BY id_fac
-                ) p ON e.ID_Fac = p.id_fac
+                ) p ON e.id_fac = p.id_fac
                 WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition} {$clientFilter}
-                AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
+                AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)) > 0.05
             )
             SELECT 
                 codcli,
                 nomcli,
                 nomven,
-                COUNT(DISTINCT ID_Fac) as facturas_pendientes,
+                COUNT(DISTINCT id_fac) as facturas_pendientes,
                 MAX(dias_mora) as max_dias_mora,
                 ROUND(SUM(saldo), 2) as saldo_total
             FROM Cartera

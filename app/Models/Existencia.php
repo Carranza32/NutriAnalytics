@@ -17,11 +17,11 @@ class Existencia extends Model
         'CodEmp',
         'codprd',
         'codbod',
-        'Exiprd',
+        'exiprd',
     ];
 
     protected $casts = [
-        'Exiprd' => 'float',
+        'exiprd' => 'float',
     ];
 
     public function producto(): BelongsTo

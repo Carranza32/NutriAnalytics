@@ -11,7 +11,7 @@ class Factura extends Model
 {
     protected $table = 'encfct';
 
-    protected $primaryKey = 'ID_Fac';
+    protected $primaryKey = 'id_fac';
 
     protected $keyType = 'string';
 
@@ -21,7 +21,7 @@ class Factura extends Model
 
     protected $fillable = [
         'CodEmp',
-        'ID_Fac',
+        'id_fac',
         'codsuc',
         'tipfct',
         'numfct',
@@ -48,7 +48,7 @@ class Factura extends Model
 
     public function detalles(): HasMany
     {
-        return $this->hasMany(FacturaDetalle::class, 'ID_Fac', 'ID_Fac');
+        return $this->hasMany(FacturaDetalle::class, 'id_fac', 'id_fac');
     }
 
     public function cliente(): BelongsTo

@@ -79,7 +79,7 @@ class ReportService
     protected function buildBaseQuery(array $filters)
     {
         $query = DB::table('encfct as e')
-            ->join('detfct as d', 'e.ID_Fac', '=', 'd.ID_Fac')
+            ->join('detfct as d', 'e.id_fac', '=', 'd.id_fac')
             ->leftJoin('clientes as c', DB::raw('RTRIM(e.codcli)'), '=', DB::raw('RTRIM(c.codcli)'))
             ->leftJoin('vendedores as v', DB::raw('RTRIM(e.codven)'), '=', DB::raw('RTRIM(v.codven)'))
             ->leftJoin('sucursales as s', DB::raw('RTRIM(e.codsuc)'), '=', DB::raw('RTRIM(s.codsuc)'))
@@ -131,7 +131,7 @@ class ReportService
         // KPIs calculados
         $kpisRaw = (clone $baseQuery)
             ->selectRaw('
-                COUNT(DISTINCT e.ID_Fac) as total_invoices,
+                COUNT(DISTINCT e.id_fac) as total_invoices,
                 COUNT(DISTINCT e.codcli) as total_clients,
                 ROUND(SUM(d.qtyvta), 2) as total_units,
                 ROUND(SUM(d.qtyvta * d.prcact), 2) as total_revenue
@@ -202,11 +202,11 @@ class ReportService
         return $this->buildBaseQuery($filters)
             ->select([
                 DB::raw('RTRIM(COALESCE(v.nomven, e.codven)) as vendedor'),
-                DB::raw('COUNT(DISTINCT e.ID_Fac) as total_facturas'),
+                DB::raw('COUNT(DISTINCT e.id_fac) as total_facturas'),
                 DB::raw('COUNT(DISTINCT e.codcli) as total_clientes'),
                 DB::raw('ROUND(SUM(d.qtyvta), 2) as unidades'),
                 DB::raw('ROUND(SUM(d.qtyvta * d.prcact), 2) as total_facturado'),
-                DB::raw('ROUND(SUM(d.qtyvta * d.prcact) / NULLIF(COUNT(DISTINCT e.ID_Fac), 0), 2) as ticket_promedio'),
+                DB::raw('ROUND(SUM(d.qtyvta * d.prcact) / NULLIF(COUNT(DISTINCT e.id_fac), 0), 2) as ticket_promedio'),
             ])
             ->groupBy(DB::raw('RTRIM(COALESCE(v.nomven, e.codven))'))
             ->orderByDesc(DB::raw('SUM(d.qtyvta * d.prcact)'))
@@ -242,7 +242,7 @@ class ReportService
         return $this->buildBaseQuery($filters)
             ->select([
                 DB::raw('RTRIM(COALESCE(s.nomsuc, e.codsuc)) as sucursal'),
-                DB::raw('COUNT(DISTINCT e.ID_Fac) as total_facturas'),
+                DB::raw('COUNT(DISTINCT e.id_fac) as total_facturas'),
                 DB::raw('ROUND(SUM(d.qtyvta), 2) as unidades'),
                 DB::raw('ROUND(SUM(d.qtyvta * d.prcact), 2) as total_facturado'),
             ])

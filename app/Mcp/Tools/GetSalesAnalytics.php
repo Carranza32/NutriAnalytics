@@ -76,7 +76,7 @@ class GetSalesAnalytics extends Tool
                 DB::raw("COALESCE(NULLIF(RTRIM(v.nomven), ''), 'Asesor Sin Asignar (' + RTRIM(e.codven) + ')') as nombre"),
                 DB::raw('RTRIM(e.codven) as codigo'),
                 DB::raw('ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as venta'),
-                DB::raw('COUNT(DISTINCT e.ID_Fac) as facturas')
+                DB::raw('COUNT(DISTINCT e.id_fac) as facturas')
             )
                 ->groupBy(DB::raw('e.codven'), DB::raw('v.nomven'))
                 ->orderByDesc('venta')
@@ -84,7 +84,7 @@ class GetSalesAnalytics extends Tool
                 ->get();
         } elseif ($groupBy === 'marca') {
             $q = DB::table('detfct as d')
-                ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+                ->join('encfct as e', 'd.id_fac', '=', 'e.id_fac')
                 ->leftJoin('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
                 ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
                 ->where('e.estado', '!=', 'A')
@@ -117,7 +117,7 @@ class GetSalesAnalytics extends Tool
                 DB::raw("COALESCE(NULLIF(RTRIM(s.nomsuc), ''), 'Sucursal ' + RTRIM(e.codsuc)) as nombre"),
                 DB::raw('RTRIM(e.codsuc) as codigo'),
                 DB::raw('ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as venta'),
-                DB::raw('COUNT(DISTINCT e.ID_Fac) as facturas')
+                DB::raw('COUNT(DISTINCT e.id_fac) as facturas')
             )
                 ->groupBy(DB::raw('e.codsuc'), DB::raw('s.nomsuc'))
                 ->orderByDesc('venta')
@@ -135,7 +135,7 @@ class GetSalesAnalytics extends Tool
                 DB::raw('MONTH(e.fecfct) as mes_num'),
                 DB::raw('YEAR(e.fecfct) as anio'),
                 DB::raw('ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as venta'),
-                DB::raw('COUNT(DISTINCT e.ID_Fac) as facturas')
+                DB::raw('COUNT(DISTINCT e.id_fac) as facturas')
             )
                 ->groupBy(DB::raw('YEAR(e.fecfct)'), DB::raw('MONTH(e.fecfct)'))
                 ->orderBy('anio')
