@@ -1,17 +1,21 @@
 FROM php:8.4-cli-alpine
 
-# Instalar dependencias del sistema y extensiones de PHP (PostgreSQL)
+# Instalar dependencias del sistema y extensiones de PHP (PostgreSQL, GD, ZIP)
 RUN apk add --no-cache \
     git \
     curl \
     libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    libzip-dev \
     libxml2-dev \
     zip \
     unzip \
     nodejs \
     npm \
     postgresql-dev \
-    && docker-php-ext-install pdo pdo_pgsql
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo pdo_pgsql gd zip
 
 # Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -22,7 +26,7 @@ WORKDIR /var/www
 COPY . .
 
 # Instalar dependencias PHP y compilar assets frontend
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-reqs
 RUN npm install && npm run build
 
 # Permisos de almacenamiento
