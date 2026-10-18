@@ -560,14 +560,14 @@ class DashboardAnalyticsService
             )
             SELECT 
                 m.mes_num,
-                ISNULL(v25.venta_2025, 0) as venta_2025,
-                ISNULL(v26.venta_2026, 0) as venta_2026,
-                ISNULL(v25.facturas_2025, 0) as facturas_2025,
-                ISNULL(v26.facturas_2026, 0) as facturas_2026,
-                ROUND(ISNULL(v26.venta_2026, 0) - ISNULL(v25.venta_2025, 0), 2) as diff_monto,
+                COALESCE(v25.venta_2025, 0) as venta_2025,
+                COALESCE(v26.venta_2026, 0) as venta_2026,
+                COALESCE(v25.facturas_2025, 0) as facturas_2025,
+                COALESCE(v26.facturas_2026, 0) as facturas_2026,
+                ROUND(COALESCE(v26.venta_2026, 0) - COALESCE(v25.venta_2025, 0), 2) as diff_monto,
                 CASE 
-                    WHEN ISNULL(v25.venta_2025, 0) > 0 THEN 
-                        ROUND(((ISNULL(v26.venta_2026, 0) - v25.venta_2025) / v25.venta_2025) * 100, 1)
+                    WHEN COALESCE(v25.venta_2025, 0) > 0 THEN 
+                        ROUND(((COALESCE(v26.venta_2026, 0) - v25.venta_2025) / v25.venta_2025) * 100, 1)
                     ELSE 0 
                 END as diff_pct
             FROM (
@@ -652,7 +652,7 @@ class DashboardAnalyticsService
                 SELECT 
                     e.ID_Fac,
                     DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
-                    ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0), 2) as saldo
+                    ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0), 2) as saldo
                 FROM Encfct e
                 LEFT JOIN (
                     SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
@@ -660,7 +660,7 @@ class DashboardAnalyticsService
                     GROUP BY id_fac
                 ) p ON e.ID_Fac = p.id_fac
                 WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition}
-                AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
+                AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)) > 0.05
             )
             SELECT 
                 CASE 
@@ -730,7 +730,7 @@ class DashboardAnalyticsService
                     RTRIM(COALESCE(e.shipto, c.nomcli)) as nomcli,
                     RTRIM(COALESCE(v.nomven, e.codven, 'OFIC')) as nomven,
                     DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
-                    ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0), 2) as saldo
+                    ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0), 2) as saldo
                 FROM Encfct e
                 INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
                 LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
@@ -740,7 +740,7 @@ class DashboardAnalyticsService
                     GROUP BY id_fac
                 ) p ON e.ID_Fac = p.id_fac
                 WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition}
-                AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
+                AND (CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)) > 0.05
             )
             SELECT TOP 6
                 codcli,
@@ -784,7 +784,7 @@ class DashboardAnalyticsService
             Saldos AS (
                 SELECT 
                     RTRIM(e.codcli) as codcli,
-                    ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)), 2) as saldo_deuda,
+                    ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)), 2) as saldo_deuda,
                     MAX(DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date))) as max_mora
                 FROM Encfct e
                 LEFT JOIN (
@@ -794,7 +794,7 @@ class DashboardAnalyticsService
                 ) p ON e.ID_Fac = p.id_fac
                 WHERE e.estado != 'A' AND e.condpgo = 'CRD' {$sucursalCondition}
                 GROUP BY e.codcli
-                HAVING SUM(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0)) > 0.05
+                HAVING SUM(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)) > 0.05
             )
             SELECT TOP 6
                 cs.codcli,
@@ -804,8 +804,8 @@ class DashboardAnalyticsService
                 cs.dias_sin_comprar,
                 cs.total_facturas,
                 cs.compras_totales,
-                ISNULL(s.saldo_deuda, 0) as saldo_deuda,
-                ISNULL(s.max_mora, 0) as max_mora
+                COALESCE(s.saldo_deuda, 0) as saldo_deuda,
+                COALESCE(s.max_mora, 0) as max_mora
             FROM ClientesStats cs
             LEFT JOIN Saldos s ON cs.codcli = s.codcli
             ORDER BY cs.compras_totales DESC
@@ -919,13 +919,13 @@ class DashboardAnalyticsService
                 RTRIM(p.nomprd) as producto,
                 RTRIM(COALESCE(r.nomrub, 'GENERAL')) as marca,
                 RTRIM(COALESCE(p.unibas, 'UNIDAD')) as unibas,
-                ISNULL(s.stock_total, 0) as stock_actual,
+                COALESCE(s.stock_total, 0) as stock_actual,
                 v.consumo_mensual,
                 v.unidades_6m,
                 v.venta_6m,
                 CASE 
-                    WHEN ISNULL(s.stock_total, 0) <= 0 THEN 0
-                    WHEN v.consumo_mensual > 0 THEN ROUND((ISNULL(s.stock_total, 0) / (v.consumo_mensual / 30.0)), 0)
+                    WHEN COALESCE(s.stock_total, 0) <= 0 THEN 0
+                    WHEN v.consumo_mensual > 0 THEN ROUND((COALESCE(s.stock_total, 0) / (v.consumo_mensual / 30.0)), 0)
                     ELSE 999
                 END as dias_cobertura
             FROM VentasRecientes v
