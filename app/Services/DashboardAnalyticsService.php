@@ -175,7 +175,7 @@ class DashboardAnalyticsService
      */
     public function getKpis(array $dateRange, ?string $sucursal = null): array
     {
-        $invoicesQuery = DB::table('Encfct as e')
+        $invoicesQuery = DB::table('encfct as e')
             ->where('e.estado', '!=', 'A');
 
         if (! empty($sucursal)) {
@@ -197,7 +197,7 @@ class DashboardAnalyticsService
 
         // Unidades vendidas en el período
         $itemsQuery = DB::table('detfct as d')
-            ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
             ->where('e.estado', '!=', 'A');
 
         if (! empty($sucursal)) {
@@ -211,7 +211,7 @@ class DashboardAnalyticsService
         // Artículos activos e inventario en quiebre o agotado
         $activeProductsCount = DB::table('productos')->where('estado', 'A')->count();
 
-        $stockQuery = DB::table('Existencias as ex')
+        $stockQuery = DB::table('existencias as ex')
             ->join('productos as p', DB::raw('RTRIM(ex.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
             ->where('p.estado', 'A');
 
@@ -245,7 +245,7 @@ class DashboardAnalyticsService
      */
     public function getSalesTrend(array $dateRange, ?string $sucursal = null): array
     {
-        $query = DB::table('Encfct as e')
+        $query = DB::table('encfct as e')
             ->where('e.estado', '!=', 'A');
 
         if (! empty($sucursal)) {
@@ -265,7 +265,7 @@ class DashboardAnalyticsService
             ->get();
 
         $unitsQuery = DB::table('detfct as d')
-            ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
             ->where('e.estado', '!=', 'A');
 
         if (! empty($sucursal)) {
@@ -302,7 +302,7 @@ class DashboardAnalyticsService
     public function getCategoryDistribution(array $dateRange, ?string $sucursal = null): array
     {
         $query = DB::table('detfct as d')
-            ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
             ->join('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
             ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
             ->where('e.estado', '!=', 'A');
@@ -346,7 +346,7 @@ class DashboardAnalyticsService
     public function getTopProducts(array $dateRange, int $limit = 5, ?string $sucursal = null): array
     {
         $query = DB::table('detfct as d')
-            ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
             ->join('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
             ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
             ->where('e.estado', '!=', 'A');
@@ -375,7 +375,7 @@ class DashboardAnalyticsService
             ->get();
 
         $codes = $top->pluck('product_id')->all();
-        $stockQuery = DB::table('Existencias')
+        $stockQuery = DB::table('existencias')
             ->whereIn(DB::raw('RTRIM(codprd)'), $codes);
 
         if (! empty($sucursal)) {
@@ -410,7 +410,7 @@ class DashboardAnalyticsService
      */
     public function getCommercialForceDistribution(array $dateRange, int $limit = 6, ?string $sucursal = null): array
     {
-        $query = DB::table('Encfct as e')
+        $query = DB::table('encfct as e')
             ->leftJoin('vendedores as v', DB::raw('RTRIM(e.codven)'), '=', DB::raw('RTRIM(v.codven)'))
             ->where('e.estado', '!=', 'A');
 
@@ -444,7 +444,7 @@ class DashboardAnalyticsService
      */
     public function getRecentOrders(array $dateRange, int $limit = 6): array
     {
-        $query = DB::table('Encfct as e')
+        $query = DB::table('encfct as e')
             ->leftJoin('vendedores as v', DB::raw('RTRIM(e.codven)'), '=', DB::raw('RTRIM(v.codven)'))
             ->where('e.estado', '!=', 'A');
 
@@ -491,7 +491,7 @@ class DashboardAnalyticsService
      */
     public function getLowStockAlerts(int $limit = 6): array
     {
-        $alerts = DB::table('Existencias as ex')
+        $alerts = DB::table('existencias as ex')
             ->join('productos as p', DB::raw('RTRIM(ex.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
             ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
             ->where('p.estado', 'A')
@@ -545,7 +545,7 @@ class DashboardAnalyticsService
                     MONTH(fecfct) as mes_num,
                     ROUND(SUM(CAST(valgrv as float) + CAST(valexe as float)), 2) as venta_2025,
                     COUNT(DISTINCT ID_Fac) as facturas_2025
-                FROM Encfct
+                FROM encfct
                 WHERE estado != 'A' AND YEAR(fecfct) = 2025 {$sucursalCondition}
                 GROUP BY MONTH(fecfct)
             ),
@@ -554,7 +554,7 @@ class DashboardAnalyticsService
                     MONTH(fecfct) as mes_num,
                     ROUND(SUM(CAST(valgrv as float) + CAST(valexe as float)), 2) as venta_2026,
                     COUNT(DISTINCT ID_Fac) as facturas_2026
-                FROM Encfct
+                FROM encfct
                 WHERE estado != 'A' AND YEAR(fecfct) = 2026 {$sucursalCondition}
                 GROUP BY MONTH(fecfct)
             )
@@ -571,7 +571,7 @@ class DashboardAnalyticsService
                     ELSE 0 
                 END as diff_pct
             FROM (
-                SELECT DISTINCT MONTH(fecfct) as mes_num FROM Encfct WHERE YEAR(fecfct) IN (2025, 2026)
+                SELECT DISTINCT MONTH(fecfct) as mes_num FROM encfct WHERE YEAR(fecfct) IN (2025, 2026)
             ) m
             LEFT JOIN Ventas2025 v25 ON m.mes_num = v25.mes_num
             LEFT JOIN Ventas2026 v26 ON m.mes_num = v26.mes_num
@@ -653,7 +653,7 @@ class DashboardAnalyticsService
                     e.ID_Fac,
                     DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
                     ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0), 2) as saldo
-                FROM Encfct e
+                FROM encfct e
                 LEFT JOIN (
                     SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
                     FROM movcxc
@@ -731,7 +731,7 @@ class DashboardAnalyticsService
                     RTRIM(COALESCE(v.nomven, e.codven, 'OFIC')) as nomven,
                     DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
                     ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0), 2) as saldo
-                FROM Encfct e
+                FROM encfct e
                 INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
                 LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
                 LEFT JOIN (
@@ -775,7 +775,7 @@ class DashboardAnalyticsService
                     DATEDIFF(day, MAX(e.fecfct), CAST('2026-10-13' AS date)) as dias_sin_comprar,
                     COUNT(DISTINCT e.ID_Fac) as total_facturas,
                     ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as compras_totales
-                FROM Encfct e
+                FROM encfct e
                 INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
                 LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
                 WHERE e.estado != 'A' {$sucursalCondition}
@@ -786,7 +786,7 @@ class DashboardAnalyticsService
                     RTRIM(e.codcli) as codcli,
                     ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - COALESCE(p.total_pagado, 0)), 2) as saldo_deuda,
                     MAX(DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date))) as max_mora
-                FROM Encfct e
+                FROM encfct e
                 LEFT JOIN (
                     SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
                     FROM movcxc
@@ -839,7 +839,7 @@ class DashboardAnalyticsService
                     DATEDIFF(day, MAX(e.fecfct), CAST('2026-10-13' AS date)) as dias_sin_comprar,
                     ROUND(SUM(CAST(e.valgrv as float) + CAST(e.valexe as float)), 2) as compras_totales,
                     COUNT(DISTINCT e.ID_Fac) as facturas_total
-                FROM Encfct e
+                FROM encfct e
                 INNER JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
                 LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
                 WHERE e.estado != 'A' AND YEAR(e.fecfct) >= 2025 {$sucursalCondition}
@@ -902,7 +902,7 @@ class DashboardAnalyticsService
                     ROUND(SUM(CAST(d.qtyvta as float)) / 6.0, 1) as consumo_mensual,
                     ROUND(SUM(CAST(d.qtyvta as float) * CAST(d.prcact as float)), 2) as venta_6m
                 FROM detfct d
-                INNER JOIN Encfct e ON d.ID_Fac = e.ID_Fac
+                INNER JOIN encfct e ON d.ID_Fac = e.ID_Fac
                 WHERE e.estado != 'A' AND e.fecfct >= '2026-04-01' {$sucursalSalesFilter}
                 GROUP BY d.codprd
             ),
@@ -910,7 +910,7 @@ class DashboardAnalyticsService
                 SELECT 
                     RTRIM(codprd) as codprd,
                     ROUND(SUM(CAST(Exiprd as float)), 0) as stock_total
-                FROM Existencias
+                FROM existencias
                 {$sucursalStockFilter}
                 GROUP BY codprd
             )

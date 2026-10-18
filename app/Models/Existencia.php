@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Existencia extends Model
 {
-    protected $table = 'Existencias';
+    protected $table = 'existencias';
 
     public $timestamps = false;
 

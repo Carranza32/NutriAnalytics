@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Factura extends Model
 {
-    protected $table = 'Encfct';
+    protected $table = 'encfct';
 
     protected $primaryKey = 'ID_Fac';
 
@@ -71,7 +71,7 @@ class Factura extends Model
      */
     public function scopeValida(Builder $query): Builder
     {
-        return $query->where('Encfct.estado', '!=', 'A');
+        return $query->where('encfct.estado', '!=', 'A');
     }
 
     /**

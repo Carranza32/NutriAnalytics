@@ -78,7 +78,7 @@ class ReportService
      */
     protected function buildBaseQuery(array $filters)
     {
-        $query = DB::table('Encfct as e')
+        $query = DB::table('encfct as e')
             ->join('detfct as d', 'e.ID_Fac', '=', 'd.ID_Fac')
             ->leftJoin('clientes as c', DB::raw('RTRIM(e.codcli)'), '=', DB::raw('RTRIM(c.codcli)'))
             ->leftJoin('vendedores as v', DB::raw('RTRIM(e.codven)'), '=', DB::raw('RTRIM(v.codven)'))

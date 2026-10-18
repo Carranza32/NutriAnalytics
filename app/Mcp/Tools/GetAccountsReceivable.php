@@ -64,7 +64,7 @@ class GetAccountsReceivable extends Tool
                     e.ID_Fac,
                     DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
                     ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0), 2) as saldo
-                FROM Encfct e
+                FROM encfct e
                 LEFT JOIN (
                     SELECT id_fac, SUM(CAST(valmov as float)) as total_pagado
                     FROM movcxc
@@ -130,7 +130,7 @@ class GetAccountsReceivable extends Tool
                     RTRIM(COALESCE(v.nomven, e.codven, 'OFICINA')) as nomven,
                     DATEDIFF(day, e.fecven, CAST('2026-10-13' AS date)) as dias_mora,
                     ROUND(CAST(e.valgrv as float) + CAST(e.valexe as float) + CAST(e.iva as float) - ISNULL(p.total_pagado, 0), 2) as saldo
-                FROM Encfct e
+                FROM encfct e
                 LEFT JOIN clientes c ON RTRIM(e.codcli) = RTRIM(c.codcli)
                 LEFT JOIN vendedores v ON RTRIM(e.codven) = RTRIM(v.codven)
                 LEFT JOIN (

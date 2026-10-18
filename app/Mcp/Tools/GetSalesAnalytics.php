@@ -60,7 +60,7 @@ class GetSalesAnalytics extends Tool
         $limit = (int) ($validated['limit'] ?? 15);
 
         if ($groupBy === 'vendedor') {
-            $q = DB::table('Encfct as e')
+            $q = DB::table('encfct as e')
                 ->leftJoin('vendedores as v', DB::raw('RTRIM(e.codven)'), '=', DB::raw('RTRIM(v.codven)'))
                 ->where('e.estado', '!=', 'A')
                 ->whereBetween('e.fecfct', [$dateFrom, $dateTo]);
@@ -84,7 +84,7 @@ class GetSalesAnalytics extends Tool
                 ->get();
         } elseif ($groupBy === 'marca') {
             $q = DB::table('detfct as d')
-                ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+                ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
                 ->leftJoin('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
                 ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
                 ->where('e.estado', '!=', 'A')
@@ -108,7 +108,7 @@ class GetSalesAnalytics extends Tool
                 ->take($limit)
                 ->get();
         } elseif ($groupBy === 'sucursal') {
-            $q = DB::table('Encfct as e')
+            $q = DB::table('encfct as e')
                 ->leftJoin('sucursales as s', DB::raw('RTRIM(e.codsuc)'), '=', DB::raw('RTRIM(s.codsuc)'))
                 ->where('e.estado', '!=', 'A')
                 ->whereBetween('e.fecfct', [$dateFrom, $dateTo]);
@@ -123,7 +123,7 @@ class GetSalesAnalytics extends Tool
                 ->orderByDesc('venta')
                 ->get();
         } else { // mes
-            $q = DB::table('Encfct as e')
+            $q = DB::table('encfct as e')
                 ->where('e.estado', '!=', 'A')
                 ->whereBetween('e.fecfct', [$dateFrom, $dateTo]);
 

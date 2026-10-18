@@ -65,7 +65,7 @@ class GetExecutiveKpis extends Tool
         }
 
         // Consulta de Facturación
-        $invQuery = DB::table('Encfct as e')
+        $invQuery = DB::table('encfct as e')
             ->where('e.estado', '!=', 'A')
             ->whereBetween('e.fecfct', [$dateFrom, $dateTo]);
 
@@ -86,7 +86,7 @@ class GetExecutiveKpis extends Tool
 
         // Unidades despachadas
         $unitsQuery = DB::table('detfct as d')
-            ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
             ->where('e.estado', '!=', 'A')
             ->whereBetween('e.fecfct', [$dateFrom, $dateTo]);
 

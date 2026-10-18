@@ -56,7 +56,7 @@ class GetTopProducts extends Tool
         $limit = (int) ($validated['limit'] ?? 10);
 
         $q = DB::table('detfct as d')
-            ->join('Encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
+            ->join('encfct as e', 'd.ID_Fac', '=', 'e.ID_Fac')
             ->leftJoin('productos as p', DB::raw('RTRIM(d.codprd)'), '=', DB::raw('RTRIM(p.codprd)'))
             ->leftJoin('rubros as r', DB::raw('RTRIM(p.codrub)'), '=', DB::raw('RTRIM(r.codrub)'))
             ->where('e.estado', '!=', 'A')
@@ -91,7 +91,7 @@ class GetTopProducts extends Tool
 
         // Obtener stock actual de los productos en el ranking
         $codes = $products->pluck('codprd')->all();
-        $stockQuery = DB::table('Existencias')
+        $stockQuery = DB::table('existencias')
             ->whereIn(DB::raw('RTRIM(codprd)'), $codes);
 
         if ($sucursal) {

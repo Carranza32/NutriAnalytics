@@ -95,7 +95,7 @@ class SearchInventoryAndStock extends Tool
         $productCodes = $products->pluck('codprd')->all();
 
         // Obtener existencias desglosadas por bodega
-        $stockQuery = DB::table('Existencias')
+        $stockQuery = DB::table('existencias')
             ->whereIn(DB::raw('RTRIM(codprd)'), $productCodes);
 
         if ($sucursal) {
