@@ -33,7 +33,7 @@ services:
       - key: DB_SEARCH_PATH
         value: public,geosoft
       - key: SESSION_DRIVER
-        value: file
+        value: database
       - key: CACHE_STORE
         value: file
       - key: MCP_API_KEY
