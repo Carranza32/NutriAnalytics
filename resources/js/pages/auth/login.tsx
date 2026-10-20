@@ -1,28 +1,22 @@
 import { Form, Head } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
-import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { store } from '@/routes/login';
-import { request } from '@/routes/password';
-import PasskeyVerify from '@/components/passkey-verify';
 import { ShieldCheck } from 'lucide-react';
 
 type Props = {
     status?: string;
-    canResetPassword: boolean;
 };
 
-export default function Login({ status, canResetPassword }: Props) {
+export default function Login({ status }: Props) {
     return (
         <>
             <Head title="Iniciar Sesión • NutriAnalytics" />
-
-            <PasskeyVerify />
 
             <Form
                 {...store.form()}
@@ -34,17 +28,17 @@ export default function Login({ status, canResetPassword }: Props) {
                         <div className="grid gap-5">
                             <div className="grid gap-2">
                                 <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
-                                    Correo Electrónico
+                                    Usuario o Correo Electrónico
                                 </Label>
                                 <Input
                                     id="email"
-                                    type="email"
+                                    type="text"
                                     name="email"
                                     required
                                     autoFocus
                                     tabIndex={1}
-                                    autoComplete="email"
-                                    placeholder="director@nutrianalytics.com"
+                                    autoComplete="username"
+                                    placeholder="admin@nutrianalytics.com"
                                     className="focus-visible:ring-emerald-500"
                                 />
                                 <InputError message={errors.email} />
@@ -55,15 +49,6 @@ export default function Login({ status, canResetPassword }: Props) {
                                     <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
                                         Contraseña
                                     </Label>
-                                    {canResetPassword && (
-                                        <TextLink
-                                            href={request()}
-                                            className="ml-auto text-xs text-neutral-500 hover:text-emerald-600 dark:hover:text-emerald-400"
-                                            tabIndex={5}
-                                        >
-                                            ¿Olvidaste tu contraseña?
-                                        </TextLink>
-                                    )}
                                 </div>
                                 <PasswordInput
                                     id="password"
