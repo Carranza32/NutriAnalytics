@@ -7,10 +7,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 import PasskeyVerify from '@/components/passkey-verify';
+import { ShieldCheck } from 'lucide-react';
 
 type Props = {
     status?: string;
@@ -20,7 +20,7 @@ type Props = {
 export default function Login({ status, canResetPassword }: Props) {
     return (
         <>
-            <Head title="Log in" />
+            <Head title="Iniciar Sesión • NutriAnalytics" />
 
             <PasskeyVerify />
 
@@ -31,9 +31,11 @@ export default function Login({ status, canResetPassword }: Props) {
             >
                 {({ processing, errors }) => (
                     <>
-                        <div className="grid gap-6">
+                        <div className="grid gap-5">
                             <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
+                                <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
+                                    Correo Electrónico
+                                </Label>
                                 <Input
                                     id="email"
                                     type="email"
@@ -42,21 +44,24 @@ export default function Login({ status, canResetPassword }: Props) {
                                     autoFocus
                                     tabIndex={1}
                                     autoComplete="email"
-                                    placeholder="email@example.com"
+                                    placeholder="director@nutrianalytics.com"
+                                    className="focus-visible:ring-emerald-500"
                                 />
                                 <InputError message={errors.email} />
                             </div>
 
                             <div className="grid gap-2">
                                 <div className="flex items-center">
-                                    <Label htmlFor="password">Password</Label>
+                                    <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
+                                        Contraseña
+                                    </Label>
                                     {canResetPassword && (
                                         <TextLink
                                             href={request()}
-                                            className="ml-auto text-sm"
+                                            className="ml-auto text-xs text-neutral-500 hover:text-emerald-600 dark:hover:text-emerald-400"
                                             tabIndex={5}
                                         >
-                                            Forgot your password?
+                                            ¿Olvidaste tu contraseña?
                                         </TextLink>
                                     )}
                                 </div>
@@ -66,44 +71,46 @@ export default function Login({ status, canResetPassword }: Props) {
                                     required
                                     tabIndex={2}
                                     autoComplete="current-password"
-                                    placeholder="Password"
+                                    placeholder="••••••••••••"
+                                    className="focus-visible:ring-emerald-500"
                                 />
                                 <InputError message={errors.password} />
                             </div>
 
-                            <div className="flex items-center space-x-3">
+                            <div className="flex items-center space-x-2 pt-1">
                                 <Checkbox
                                     id="remember"
                                     name="remember"
                                     tabIndex={3}
+                                    className="data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
                                 />
-                                <Label htmlFor="remember">Remember me</Label>
+                                <Label htmlFor="remember" className="text-sm text-neutral-600 dark:text-neutral-300 font-normal cursor-pointer">
+                                    Recordar este dispositivo
+                                </Label>
                             </div>
 
                             <Button
                                 type="submit"
-                                className="mt-4 w-full"
+                                className="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm transition-all"
                                 tabIndex={4}
                                 disabled={processing}
                                 data-test="login-button"
                             >
-                                {processing && <Spinner />}
-                                Log in
+                                {processing && <Spinner className="mr-2" />}
+                                Ingresar al Portal
                             </Button>
                         </div>
 
-                        <div className="text-muted-foreground text-center text-sm">
-                            Don't have an account?{' '}
-                            <TextLink href={register()} tabIndex={5}>
-                                Sign up
-                            </TextLink>
+                        <div className="mt-2 rounded-lg border border-black/[0.05] bg-neutral-50/70 p-3 text-center text-xs text-neutral-500 dark:border-white/[0.06] dark:bg-neutral-800/40 dark:text-neutral-400 flex items-center justify-center gap-1.5">
+                            <ShieldCheck className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <span>Acceso restringido a personal directivo y gerencial</span>
                         </div>
                     </>
                 )}
             </Form>
 
             {status && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
+                <div className="mb-4 text-center text-sm font-medium text-emerald-600 dark:text-emerald-400">
                     {status}
                 </div>
             )}
@@ -112,6 +119,6 @@ export default function Login({ status, canResetPassword }: Props) {
 }
 
 Login.layout = {
-    title: 'Log in to your account',
-    description: 'Enter your email and password below to log in',
+    title: 'NutriAnalytics • Portal Ejecutivo',
+    description: 'Ingresa tus credenciales corporativas para acceder',
 };

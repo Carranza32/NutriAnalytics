@@ -161,7 +161,7 @@ return [
     */
 
     'features' => [
-        Features::registration(),
+        // Features::registration(), // Deshabilitado para portal privado corporativo
         Features::resetPasswords(),
         Features::emailVerification(),
         Features::twoFactorAuthentication([

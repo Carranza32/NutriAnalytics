@@ -32,3 +32,5 @@ services:
         value: file
       - key: CACHE_STORE
         value: file
+      - key: MCP_API_KEY
+        value: agro_sec_9d8e27c1f0b48a176e3d9284fa0c51b7

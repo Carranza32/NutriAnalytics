@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ValidateMcpApiKey;
 use App\Mcp\Servers\AgroMcpServer;
 use Laravel\Mcp\Facades\Mcp;
 
@@ -12,10 +13,11 @@ use Laravel\Mcp\Facades\Mcp;
 | 1. Mcp::local() habilita el transporte STDIO ('php artisan mcp:start agro')
 |    ideal para clientes locales como Claude Desktop.
 | 2. Mcp::web() habilita el transporte Streamable HTTP (POST /mcp/agro)
-|    ideal para conectores web remotos (Claude Web, Lovable, Claude Code, agentes en la nube).
+|    protegido por ValidateMcpApiKey (Authorization: Bearer <MCP_API_KEY>).
 |
 */
 
 Mcp::local('agro', AgroMcpServer::class);
 
-Mcp::web('/mcp/agro', AgroMcpServer::class);
+Mcp::web('/mcp/agro', AgroMcpServer::class)
+    ->middleware(ValidateMcpApiKey::class);
