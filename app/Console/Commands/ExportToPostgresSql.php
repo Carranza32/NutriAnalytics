@@ -36,7 +36,9 @@ class ExportToPostgresSql extends Command
         fwrite($handle, "-- ==========================================================\n\n");
 
         fwrite($handle, "SET client_encoding = 'UTF8';\n");
-        fwrite($handle, "SET standard_conforming_strings = on;\n\n");
+        fwrite($handle, "SET standard_conforming_strings = on;\n");
+        fwrite($handle, "CREATE SCHEMA IF NOT EXISTS geosoft;\n");
+        fwrite($handle, "SET search_path TO geosoft, public;\n\n");
 
         // Funciones de compatibilidad para que todas las consultas T-SQL funcionen igual
         fwrite($handle, "-- Funciones de compatibilidad T-SQL en PostgreSQL\n");
@@ -101,21 +103,24 @@ class ExportToPostgresSql extends Command
             $columnDefs = [];
             $colNames = [];
             foreach ($columns as $col) {
-                $colName = strtolower(trim($col->COLUMN_NAME));
+                $colName = strtolower(trim((string) ($col->COLUMN_NAME ?? $col->column_name)));
                 $colNames[] = $colName;
-                $sqlType = strtolower($col->DATA_TYPE);
+                $sqlType = strtolower((string) ($col->DATA_TYPE ?? $col->data_type));
+                $scale = $col->NUMERIC_SCALE ?? $col->numeric_scale ?? null;
+                $precision = $col->NUMERIC_PRECISION ?? $col->numeric_precision ?? 18;
+                $charMax = $col->CHARACTER_MAXIMUM_LENGTH ?? $col->character_maximum_length ?? null;
 
                 $pgType = match ($sqlType) {
                     'int', 'smallint', 'tinyint' => 'INTEGER',
                     'bigint' => 'BIGINT',
-                    'decimal', 'numeric', 'money', 'smallmoney' => (($col->NUMERIC_SCALE !== null && (int)$col->NUMERIC_SCALE === 0 && ($col->NUMERIC_PRECISION ?: 18) <= 9)) ? 'INTEGER' : 'NUMERIC',
+                    'decimal', 'numeric', 'money', 'smallmoney' => (($scale !== null && (int)$scale === 0 && (int)$precision <= 9)) ? 'INTEGER' : 'NUMERIC',
                     'float', 'real' => 'DOUBLE PRECISION',
                     'datetime', 'datetime2', 'smalldatetime' => 'TIMESTAMP',
                     'date' => 'DATE',
                     'bit' => 'BOOLEAN',
                     'text', 'ntext' => 'TEXT',
-                    default => ($col->CHARACTER_MAXIMUM_LENGTH > 0 && $col->CHARACTER_MAXIMUM_LENGTH <= 2000)
-                        ? "VARCHAR({$col->CHARACTER_MAXIMUM_LENGTH})"
+                    default => ($charMax > 0 && $charMax <= 2000)
+                        ? "VARCHAR({$charMax})"
                         : 'TEXT',
                 };
 

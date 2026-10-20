@@ -28,6 +28,8 @@ services:
         value: iSJTdPh9fUIO2pKz
       - key: DB_SSLMODE
         value: require
+      - key: DB_SEARCH_PATH
+        value: public,geosoft
       - key: SESSION_DRIVER
         value: file
       - key: CACHE_STORE

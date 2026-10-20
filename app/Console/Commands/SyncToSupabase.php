@@ -58,16 +58,17 @@ class SyncToSupabase extends Command
             'movcxc' => 'movcxc',
         ];
 
-        // Verificar si las tablas ya existen en Supabase; si no existen, aplicar el esquema automáticamente
-        $checkStmt = $pgPdo->query("SELECT to_regclass('public.sucursales')");
+        // Verificar si las tablas ya existen en Supabase en el schema geosoft; si no existen, aplicar el esquema automáticamente
+        $pgPdo->exec("CREATE SCHEMA IF NOT EXISTS geosoft; SET search_path TO geosoft, public;");
+        $checkStmt = $pgPdo->query("SELECT to_regclass('geosoft.sucursales')");
         $tableExists = $checkStmt->fetchColumn();
 
         if (! $tableExists) {
-            $this->warn('Las tablas no existen en Supabase. Aplicando esquema DDL e índices iniciales...');
+            $this->warn('Las tablas no existen en el schema geosoft de Supabase. Aplicando esquema DDL e índices iniciales...');
             $schemaFile = database_path('geopost_pyme_schema.sql');
             if (file_exists($schemaFile)) {
                 $pgPdo->exec(file_get_contents($schemaFile));
-                $this->info('✅ Esquema e índices creados con éxito en Supabase.');
+                $this->info('✅ Esquema e índices creados con éxito en schema geosoft.');
             } else {
                 $this->error("No se encontró el archivo de esquema: {$schemaFile}");
                 return Command::FAILURE;
@@ -77,7 +78,7 @@ class SyncToSupabase extends Command
         $startTime = microtime(true);
 
         foreach ($tables as $targetTable => $sourceTable) {
-            $this->info("Sincronizando: {$sourceTable} -> {$targetTable}...");
+            $this->info("Sincronizando: {$sourceTable} -> geosoft.{$targetTable}...");
 
             $columns = DB::select("
                 SELECT COLUMN_NAME, DATA_TYPE
@@ -91,8 +92,8 @@ class SyncToSupabase extends Command
             $colNames = array_map(fn($c) => strtolower(trim($c->COLUMN_NAME)), $columns);
             $quotedCols = implode(', ', array_map(fn($c) => "\"{$c}\"", $colNames));
 
-            // Truncar tabla destino
-            $pgPdo->exec("TRUNCATE TABLE \"{$targetTable}\" CASCADE;");
+            // Truncar tabla destino en schema geosoft
+            $pgPdo->exec("TRUNCATE TABLE geosoft.\"{$targetTable}\" CASCADE;");
 
             $total = DB::table($sourceTable)->count();
             $this->output->progressStart($total);
@@ -127,7 +128,7 @@ class SyncToSupabase extends Command
                     $placeholders[] = '(' . implode(', ', $rowPlaceholders) . ')';
                 }
 
-                $sql = "INSERT INTO \"{$targetTable}\" ({$quotedCols}) VALUES " . implode(', ', $placeholders);
+                $sql = "INSERT INTO geosoft.\"{$targetTable}\" ({$quotedCols}) VALUES " . implode(', ', $placeholders);
                 $stmt = $pgPdo->prepare($sql);
                 $stmt->execute($params);
 
