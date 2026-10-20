@@ -48,31 +48,9 @@ class FortifyServiceProvider extends ServiceProvider
 
             $user = User::where('email', Str::lower($input))
                 ->orWhere('email', Str::lower($input) . '@nutrianalytics.com')
-                ->when(in_array($input, ['admin', 'director', 'NutriAgro2026!#', 'NutriAgro2026!']), fn ($q) => $q->orWhere('email', 'admin@nutrianalytics.com'))
                 ->first();
 
-            if (! $user) {
-                return null;
-            }
-
-            try {
-                if (Hash::check($password, $user->password)) {
-                    return $user;
-                }
-            } catch (\Throwable $e) {
-                // Ignore any algorithm mismatch exceptions
-            }
-
-            // Contraseñas autorizadas para el portal ejecutivo
-            $validPasswords = [
-                'NutriAgro2026!',
-                'NutriAgro2026!#',
-                'NutriAgro20264#',
-                'NutriAgro2026',
-                'Nutri2026',
-            ];
-
-            if (in_array($password, $validPasswords, true)) {
+            if ($user && Hash::check($password, $user->password)) {
                 return $user;
             }
 

@@ -34,12 +34,30 @@
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
+        {{-- Meta tags para WhatsApp, Redes Sociales y Motores de Búsqueda --}}
+        <meta name="description" content="NutriAnalytics • Portal Ejecutivo de Inteligencia Comercial y Control ERP para NutriFertil.">
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="{{ config('app.url', 'https://nutrianalytics.onrender.com') }}">
+        <meta property="og:site_name" content="NutriAnalytics">
+        <meta property="og:title" content="NutriAnalytics • Portal Ejecutivo">
+        <meta property="og:description" content="Plataforma de Inteligencia Comercial, Facturación, Cartera e Inventarios para NutriFertil.">
+        <meta property="og:image" content="{{ config('app.url', 'https://nutrianalytics.onrender.com') }}/og-image.png">
+        <meta property="og:image:secure_url" content="{{ config('app.url', 'https://nutrianalytics.onrender.com') }}/og-image.png">
+        <meta property="og:image:type" content="image/png">
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+        
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="NutriAnalytics • Portal Ejecutivo">
+        <meta name="twitter:description" content="Plataforma de Inteligencia Comercial, Facturación, Cartera e Inventarios para NutriFertil.">
+        <meta name="twitter:image" content="{{ config('app.url', 'https://nutrianalytics.onrender.com') }}/og-image.png">
+
         @fonts
 
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
         <x-inertia::head>
-            <title>{{ config('app.name', 'Laravel') }}</title>
+            <title>{{ config('app.name', 'NutriAnalytics') }}</title>
         </x-inertia::head>
     </head>
     <body class="font-sans antialiased">
