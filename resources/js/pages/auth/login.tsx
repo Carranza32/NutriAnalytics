@@ -38,7 +38,6 @@ export default function Login({ status }: Props) {
                                     autoFocus
                                     tabIndex={1}
                                     autoComplete="username"
-                                    placeholder="admin@nutrianalytics.com"
                                     className="focus-visible:ring-emerald-500"
                                 />
                                 <InputError message={errors.email} />
@@ -56,7 +55,6 @@ export default function Login({ status }: Props) {
                                     required
                                     tabIndex={2}
                                     autoComplete="current-password"
-                                    placeholder="••••••••••••"
                                     className="focus-visible:ring-emerald-500"
                                 />
                                 <InputError message={errors.password} />
