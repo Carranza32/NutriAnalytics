@@ -50,6 +50,17 @@ const applyTheme = (appearance: Appearance): void => {
 
     document.documentElement.classList.toggle('dark', isDark);
     document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+
+    // Actualizar dinámicamente la barra de estado del celular para modo claro / oscuro
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]:not([media])');
+    if (themeColorMeta) {
+        themeColorMeta.setAttribute('content', isDark ? '#09090b' : '#ffffff');
+    }
+
+    const appleStatusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (appleStatusBar) {
+        appleStatusBar.setAttribute('content', isDark ? 'black-translucent' : 'default');
+    }
 };
 
 const subscribe = (callback: () => void) => {

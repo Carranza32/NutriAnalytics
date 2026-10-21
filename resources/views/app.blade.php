@@ -32,7 +32,17 @@
 
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        <link rel="apple-touch-icon" href="/icon-192.png">
+
+        {{-- Configuración PWA adaptativa a Modo Claro y Modo Oscuro --}}
+        <link rel="manifest" href="/manifest.json">
+        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+        <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
+        <meta name="theme-color" content="#ffffff">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+        <meta name="apple-mobile-web-app-title" content="NutriAnalytics">
 
         {{-- Meta tags para WhatsApp, Redes Sociales y Motores de Búsqueda --}}
         <meta name="description" content="NutriAnalytics • Portal Ejecutivo de Inteligencia Comercial y Control ERP para NutriFertil.">
@@ -62,5 +72,16 @@
     </head>
     <body class="font-sans antialiased">
         <x-inertia::app />
+
+        {{-- Registro de Service Worker para PWA --}}
+        <script>
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js').catch(function(err) {
+                        console.log('SW registration error:', err);
+                    });
+                });
+            }
+        </script>
     </body>
 </html>

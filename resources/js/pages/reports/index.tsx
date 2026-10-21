@@ -3,16 +3,19 @@ import type { ColumnDef } from '@tanstack/react-table';
 import {
     Building2,
     Calendar,
+    Check,
     Download,
     FileSpreadsheet,
     FileText,
     Filter,
+    Loader2,
     RotateCcw,
     Sparkles,
     Tag,
     Users,
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ExportProgressHUD, type ExportState } from '@/components/reports/export-progress-hud';
 import { DataTable } from '@/components/ui/data-table';
 import { DateRangePresetPicker } from '@/components/ui/date-range-preset-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -40,6 +43,32 @@ export default function ReportsIndex({
     const [marca, setMarca] = useState(filters.marca || '');
     const [sucursal, setSucursal] = useState(filters.sucursal || '');
     const [tipo, setTipo] = useState(filters.tipo || 'ventas_detalle');
+
+    // Estado del indicador de progreso de exportación
+    const [exportState, setExportState] = useState<ExportState>({
+        isExporting: false,
+        format: null,
+        progress: 0,
+        statusText: '',
+        isCompleted: false,
+        error: null,
+        filename: null,
+    });
+
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Limpieza de intervalos y abort controller al desmontar
+    useEffect(() => {
+        return () => {
+            if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+            }
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, []);
 
     const handleApplyFilters = (newTipo?: string) => {
         const activeTipo = newTipo || tipo;
@@ -97,6 +126,191 @@ export default function ReportsIndex({
             tipo: tipo,
         },
     });
+
+    // Control de exportación asíncrona con barra de progreso
+    const handleExport = async (format: 'excel' | 'pdf') => {
+        if (exportState.isExporting) return;
+
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        const isExcel = format === 'excel';
+        const url = isExcel ? exportExcelUrl : exportPdfUrl;
+
+        setExportState({
+            isExporting: true,
+            format,
+            progress: 12,
+            statusText: isExcel
+                ? 'Consultando registros en base de datos...'
+                : 'Recopilando indicadores ejecutivos...',
+            isCompleted: false,
+            error: null,
+            filename: null,
+        });
+
+        // Simular progreso fluido mientras el servidor compila y transmite
+        let currentProgress = 12;
+        progressIntervalRef.current = setInterval(() => {
+            setExportState((prev) => {
+                if (!prev.isExporting || prev.isCompleted) return prev;
+
+                let increment = 0;
+                if (currentProgress < 35) {
+                    increment = Math.floor(Math.random() * 6) + 4;
+                } else if (currentProgress < 70) {
+                    increment = Math.floor(Math.random() * 5) + 3;
+                } else if (currentProgress < 92) {
+                    increment = Math.floor(Math.random() * 3) + 1;
+                }
+
+                currentProgress = Math.min(currentProgress + increment, 92);
+
+                let statusText = prev.statusText;
+                if (currentProgress > 70) {
+                    statusText = isExcel
+                        ? 'Estructurando hojas de cálculo y fórmulas...'
+                        : 'Compilando maquetación y diseño ejecutivo...';
+                } else if (currentProgress > 35) {
+                    statusText = isExcel
+                        ? 'Calculando métricas y totales de ventas...'
+                        : 'Renderizando tablas comparativas...';
+                }
+
+                return {
+                    ...prev,
+                    progress: currentProgress,
+                    statusText,
+                };
+            });
+        }, 280);
+
+        try {
+            const response = await fetch(url, {
+                signal: controller.signal,
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error del servidor (${response.status})`);
+            }
+
+            const disposition = response.headers.get('content-disposition');
+            let filename = isExcel
+                ? `Reporte_Ventas_${new Date().toISOString().slice(0, 10)}.xlsx`
+                : `Resumen_Directorio_${new Date().toISOString().slice(0, 10)}.pdf`;
+
+            if (disposition && disposition.includes('filename=')) {
+                const matches = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (matches?.[1]) {
+                    filename = matches[1].replace(/['"]/g, '');
+                }
+            }
+
+            const blob = await response.blob();
+
+            if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+            }
+
+            setExportState({
+                isExporting: false,
+                format,
+                progress: 100,
+                statusText: '¡Documento generado con éxito! Descarga lista.',
+                isCompleted: true,
+                error: null,
+                filename,
+            });
+
+            // Disparar la descarga nativa en el navegador
+            const blobUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(blobUrl);
+
+            // Cerrar automáticamente la notificación después de 3.5 segundos
+            setTimeout(() => {
+                setExportState((prev) => {
+                    if (prev.isCompleted) {
+                        return {
+                            isExporting: false,
+                            format: null,
+                            progress: 0,
+                            statusText: '',
+                            isCompleted: false,
+                            error: null,
+                            filename: null,
+                        };
+                    }
+                    return prev;
+                });
+            }, 3500);
+
+        } catch (err: any) {
+            if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+            }
+            if (err.name === 'AbortError') {
+                setExportState({
+                    isExporting: false,
+                    format: null,
+                    progress: 0,
+                    statusText: '',
+                    isCompleted: false,
+                    error: null,
+                    filename: null,
+                });
+                return;
+            }
+
+            setExportState({
+                isExporting: false,
+                format,
+                progress: 0,
+                statusText: '',
+                isCompleted: false,
+                error: err.message || 'Error al generar el reporte. Intente nuevamente.',
+                filename: null,
+            });
+        }
+    };
+
+    const handleCancelExport = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+        }
+        setExportState({
+            isExporting: false,
+            format: null,
+            progress: 0,
+            statusText: '',
+            isCompleted: false,
+            error: null,
+            filename: null,
+        });
+    };
+
+    const handleDismissExport = () => {
+        setExportState({
+            isExporting: false,
+            format: null,
+            progress: 0,
+            statusText: '',
+            isCompleted: false,
+            error: null,
+            filename: null,
+        });
+    };
 
     // Columnas TanStack para Detalle de Ventas
     const detailedColumns = useMemo<ColumnDef<DetailedSaleRecord>[]>(
@@ -345,27 +559,88 @@ export default function ReportsIndex({
                         </p>
                     </div>
 
-                    {/* Botones de Exportación Directa */}
+                    {/* Botones de Exportación Directa con Feedback Interactivo */}
                     <div className="flex flex-wrap items-center gap-2.5">
-                        <a
-                            href={exportExcelUrl}
-                            download
-                            className="inline-flex items-center gap-2 rounded-xl border border-emerald-600/30 bg-emerald-600/10 px-4 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-600 hover:text-white shadow-xs dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-600 dark:hover:text-white"
+                        <button
+                            type="button"
+                            onClick={() => handleExport('excel')}
+                            disabled={exportState.isExporting}
+                            className={cn(
+                                "relative inline-flex items-center gap-2 overflow-hidden rounded-xl border px-4 py-2 text-xs font-semibold shadow-xs transition-all duration-200 active:scale-[0.98]",
+                                exportState.format === 'excel' && exportState.isExporting
+                                    ? "border-emerald-600 bg-emerald-600 text-white cursor-wait"
+                                    : exportState.format === 'excel' && exportState.isCompleted
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300"
+                                    : "border-emerald-600/30 bg-emerald-600/10 text-emerald-700 hover:bg-emerald-600 hover:text-white dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-600 dark:hover:text-white",
+                                exportState.isExporting && exportState.format !== 'excel' && "opacity-50 pointer-events-none"
+                            )}
                         >
-                            <FileSpreadsheet className="size-4" />
-                            <span>Exportar Excel (.xlsx)</span>
-                        </a>
+                            {exportState.format === 'excel' && exportState.isExporting ? (
+                                <>
+                                    <Loader2 className="size-4 animate-spin text-white" />
+                                    <span>Generando Excel... ({exportState.progress}%)</span>
+                                </>
+                            ) : exportState.format === 'excel' && exportState.isCompleted ? (
+                                <>
+                                    <Check className="size-4 text-emerald-600 dark:text-emerald-400" />
+                                    <span>¡Excel Descargado!</span>
+                                </>
+                            ) : (
+                                <>
+                                    <FileSpreadsheet className="size-4" />
+                                    <span>Exportar Excel (.xlsx)</span>
+                                </>
+                            )}
+                        </button>
 
-                        <a
-                            href={exportPdfUrl}
-                            download
-                            className="inline-flex items-center gap-2 rounded-xl border border-neutral-300 bg-white px-4 py-2 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-100 shadow-xs dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+                        <button
+                            type="button"
+                            onClick={() => handleExport('pdf')}
+                            disabled={exportState.isExporting}
+                            className={cn(
+                                "relative inline-flex items-center gap-2 overflow-hidden rounded-xl border px-4 py-2 text-xs font-semibold shadow-xs transition-all duration-200 active:scale-[0.98]",
+                                exportState.format === 'pdf' && exportState.isExporting
+                                    ? "border-rose-500 bg-rose-500 text-white cursor-wait"
+                                    : exportState.format === 'pdf' && exportState.isCompleted
+                                    ? "border-rose-500 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/20 dark:text-rose-300"
+                                    : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700",
+                                exportState.isExporting && exportState.format !== 'pdf' && "opacity-50 pointer-events-none"
+                            )}
                         >
-                            <FileText className="size-4 text-rose-500" />
-                            <span>PDF Directorio (1 Pág)</span>
-                        </a>
+                            {exportState.format === 'pdf' && exportState.isExporting ? (
+                                <>
+                                    <Loader2 className="size-4 animate-spin text-white" />
+                                    <span>Generando PDF... ({exportState.progress}%)</span>
+                                </>
+                            ) : exportState.format === 'pdf' && exportState.isCompleted ? (
+                                <>
+                                    <Check className="size-4 text-rose-600 dark:text-rose-400" />
+                                    <span>¡PDF Descargado!</span>
+                                </>
+                            ) : (
+                                <>
+                                    <FileText className="size-4 text-rose-500" />
+                                    <span>PDF Directorio (1 Pág)</span>
+                                </>
+                            )}
+                        </button>
                     </div>
                 </header>
+
+                {/* Línea de Progreso Superior estilo Apple */}
+                {exportState.isExporting && (
+                    <div className="relative -mt-4 h-1 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+                        <div
+                            className={cn(
+                                "h-full transition-all duration-300 ease-out",
+                                exportState.format === 'excel'
+                                    ? "bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600"
+                                    : "bg-gradient-to-r from-rose-500 via-amber-400 to-rose-600"
+                            )}
+                            style={{ width: `${exportState.progress}%` }}
+                        />
+                    </div>
+                )}
 
                 {/* Barra de Filtros Dinámicos con Buscadores Inteligentes */}
                 <section className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-neutral-900/80">
@@ -581,6 +856,13 @@ export default function ReportsIndex({
                         />
                     )}
                 </section>
+
+                {/* Notificación Flotante Dinámica estilo Apple */}
+                <ExportProgressHUD
+                    state={exportState}
+                    onCancel={handleCancelExport}
+                    onDismiss={handleDismissExport}
+                />
             </div>
         </>
     );
