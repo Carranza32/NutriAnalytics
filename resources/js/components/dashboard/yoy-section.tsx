@@ -1,4 +1,5 @@
 import type { ApexOptions } from 'apexcharts';
+import type { ColumnDef } from '@tanstack/react-table';
 import { motion } from 'framer-motion';
 import {
     ArrowDownRight,
@@ -10,10 +11,11 @@ import {
     TrendingDown,
     TrendingUp,
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Chart from 'react-apexcharts';
-import { formatCurrency, formatNumber } from '@/lib/utils';
-import type { YoYComparison } from '@/types/dashboard';
+import { DataTable } from '@/components/ui/data-table';
+import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import type { YoYComparison, YoYMonthlyPoint } from '@/types/dashboard';
 
 interface YoYChartProps {
     data: YoYComparison;
@@ -41,6 +43,123 @@ export function YoYSection({ data }: YoYChartProps) {
 
     const { summary, monthly } = data;
     const isPositiveGrowth = summary.diff_pct >= 0;
+
+    const yoyColumns = useMemo<ColumnDef<YoYMonthlyPoint>[]>(
+        () => [
+            {
+                accessorKey: 'mes_nombre',
+                header: 'Mes',
+                cell: ({ row }) => (
+                    <span className="font-semibold text-neutral-900 dark:text-neutral-100 whitespace-nowrap">
+                        {row.original.mes_nombre}
+                    </span>
+                ),
+            },
+            {
+                accessorKey: 'venta_2026',
+                header: 'Ventas 2026',
+                cell: ({ row }) => (
+                    <div className="text-right font-semibold text-neutral-900 dark:text-neutral-100 whitespace-nowrap">
+                        {row.original.has_data_2026 ? (
+                            formatCurrency(row.original.venta_2026)
+                        ) : (
+                            <span className="text-neutral-400 font-normal">—</span>
+                        )}
+                    </div>
+                ),
+            },
+            {
+                accessorKey: 'venta_2025',
+                header: 'Ventas 2025',
+                cell: ({ row }) => (
+                    <div className="text-right font-medium text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
+                        {formatCurrency(row.original.venta_2025)}
+                    </div>
+                ),
+            },
+            {
+                accessorKey: 'diff_monto',
+                header: 'Diferencial ($)',
+                cell: ({ row }) => {
+                    const hasData = row.original.has_data_2026;
+                    const isPositive = row.original.diff_monto >= 0;
+                    return (
+                        <div
+                            className={cn(
+                                'text-right font-semibold whitespace-nowrap',
+                                !hasData
+                                    ? 'text-neutral-400 font-normal'
+                                    : isPositive
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : 'text-rose-600 dark:text-rose-400'
+                            )}
+                        >
+                            {hasData
+                                ? (isPositive && row.original.diff_monto > 0 ? '+' : '') +
+                                  formatCurrency(row.original.diff_monto)
+                                : '—'}
+                        </div>
+                    );
+                },
+            },
+            {
+                accessorKey: 'diff_pct',
+                header: 'Variación (%)',
+                cell: ({ row }) => {
+                    const hasData = row.original.has_data_2026;
+                    const isPositive = row.original.diff_pct >= 0;
+                    return (
+                        <div className="text-right whitespace-nowrap">
+                            {hasData ? (
+                                <span
+                                    className={cn(
+                                        'inline-flex items-center gap-0.5 rounded-md px-2 py-0.5 text-[11px] font-bold',
+                                        isPositive
+                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                            : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                                    )}
+                                >
+                                    {isPositive ? (
+                                        <ArrowUpRight className="size-3" />
+                                    ) : (
+                                        <ArrowDownRight className="size-3" />
+                                    )}
+                                    {row.original.diff_pct > 0
+                                        ? `+${row.original.diff_pct}%`
+                                        : `${row.original.diff_pct}%`}
+                                </span>
+                            ) : (
+                                <span className="text-neutral-400 text-xs">Pendiente</span>
+                            )}
+                        </div>
+                    );
+                },
+            },
+            {
+                accessorKey: 'facturas_2026',
+                header: 'Facturas 2026',
+                cell: ({ row }) => (
+                    <div className="text-right font-medium text-neutral-800 dark:text-neutral-200 whitespace-nowrap">
+                        {row.original.has_data_2026 ? (
+                            formatNumber(row.original.facturas_2026)
+                        ) : (
+                            <span className="text-neutral-400 font-normal">—</span>
+                        )}
+                    </div>
+                ),
+            },
+            {
+                accessorKey: 'facturas_2025',
+                header: 'Facturas 2025',
+                cell: ({ row }) => (
+                    <div className="text-right text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
+                        {formatNumber(row.original.facturas_2025)}
+                    </div>
+                ),
+            },
+        ],
+        []
+    );
 
     const categories = monthly.map((m) => m.mes_nombre.slice(0, 3));
     const series = [
@@ -257,7 +376,7 @@ export function YoYSection({ data }: YoYChartProps) {
                 </div>
             </div>
 
-            {/* Tabla Mensual Detallada con Variaciones */}
+            {/* Tabla Mensual Detallada con Variaciones estilo DataTable */}
             <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-5 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-neutral-900/80">
                 <div className="mb-4">
                     <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
@@ -268,82 +387,13 @@ export function YoYSection({ data }: YoYChartProps) {
                     </p>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                        <thead>
-                            <tr className="border-b border-black/[0.06] text-neutral-400 dark:border-white/[0.06]">
-                                <th className="pb-3 font-medium">Mes</th>
-                                <th className="pb-3 text-right font-medium">Ventas 2026</th>
-                                <th className="pb-3 text-right font-medium">Ventas 2025</th>
-                                <th className="pb-3 text-right font-medium">Diferencial ($)</th>
-                                <th className="pb-3 text-right font-medium">Variación (%)</th>
-                                <th className="pb-3 text-right font-medium">Facturas 2026</th>
-                                <th className="pb-3 text-right font-medium">Facturas 2025</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
-                            {monthly.map((m) => {
-                                const isPositive = m.diff_pct >= 0;
-                                return (
-                                    <tr
-                                        key={m.mes_num}
-                                        className="transition-colors hover:bg-neutral-50/70 dark:hover:bg-neutral-800/40"
-                                    >
-                                        <td className="py-2.5 font-semibold text-neutral-900 dark:text-neutral-100">
-                                            {m.mes_nombre}
-                                        </td>
-                                        <td className="py-2.5 text-right font-medium text-neutral-900 dark:text-neutral-100">
-                                            {m.has_data_2026 ? formatCurrency(m.venta_2026) : '—'}
-                                        </td>
-                                        <td className="py-2.5 text-right text-neutral-500 dark:text-neutral-400">
-                                            {formatCurrency(m.venta_2025)}
-                                        </td>
-                                        <td
-                                            className={`py-2.5 text-right font-medium ${
-                                                !m.has_data_2026
-                                                    ? 'text-neutral-400'
-                                                    : isPositive
-                                                    ? 'text-emerald-600 dark:text-emerald-400'
-                                                    : 'text-rose-600 dark:text-rose-400'
-                                            }`}
-                                        >
-                                            {m.has_data_2026
-                                                ? (m.diff_monto > 0 ? `+` : '') +
-                                                  formatCurrency(m.diff_monto)
-                                                : '—'}
-                                        </td>
-                                        <td className="py-2.5 text-right">
-                                            {m.has_data_2026 ? (
-                                                <span
-                                                    className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
-                                                        isPositive
-                                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                                            : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                                                    }`}
-                                                >
-                                                    {isPositive ? (
-                                                        <ArrowUpRight className="size-3" />
-                                                    ) : (
-                                                        <ArrowDownRight className="size-3" />
-                                                    )}
-                                                    {m.diff_pct > 0 ? `+${m.diff_pct}%` : `${m.diff_pct}%`}
-                                                </span>
-                                            ) : (
-                                                <span className="text-neutral-400">Pendiente</span>
-                                            )}
-                                        </td>
-                                        <td className="py-2.5 text-right font-medium text-neutral-800 dark:text-neutral-200">
-                                            {m.has_data_2026 ? formatNumber(m.facturas_2026) : '—'}
-                                        </td>
-                                        <td className="py-2.5 text-right text-neutral-500 dark:text-neutral-400">
-                                            {formatNumber(m.facturas_2025)}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                <DataTable
+                    columns={yoyColumns}
+                    data={monthly}
+                    searchPlaceholder="Buscar por mes..."
+                    initialPageSize={12}
+                    showColumnVisibility={true}
+                />
             </div>
         </div>
     );

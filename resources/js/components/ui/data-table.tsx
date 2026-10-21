@@ -154,7 +154,7 @@ export function DataTable<TData, TValue>({
 
             {/* Tabla Renderizada con Sorting */}
             <div className="overflow-x-auto rounded-xl border border-black/[0.06] dark:border-white/[0.06]">
-                <table className="w-full text-left text-xs">
+                <table className="w-full text-left text-xs min-w-[720px]">
                     <thead>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <tr
