@@ -2,7 +2,7 @@
 ## NutriAnalytics • Portal Ejecutivo de Inteligencia Comercial & Integración con IA
 **Cliente:** Nutrifertil S.A.  
 **Proyecto:** Módulo de Reportes en Línea e Integración con Inteligencia Artificial  
-**Versión:** 2.0.0 (Entorno de Producción)  
+**Versión:** Versión 1.0 (Entorno de Producción)  
 **Fecha de Entrega:** Octubre 2026  
 **Documento de Conformidad:** Fase 7 del Presupuesto (Pruebas, Documentación y Entrega)  
 
@@ -43,7 +43,7 @@ flowchart LR
 
     subgraph Clients["Canales de Consumo"]
         Directores["Directorio & Gerencia\n(PC, Mac, iPhone, Android)"]
-        AI["Clientes de IA\n(Claude Desktop, ChatGPT, Lovable)"]
+        AI["Clientes de IA\n(Claude, ChatGPT)"]
     end
 
     ERP --> SyncScript
@@ -145,42 +145,32 @@ El servidor expone a la IA herramientas especializadas:
 
 ---
 
-### 4.3 Configuración Paso a Paso: Claude Desktop
+### 4.3 Configuración Paso a Paso: Claude (Vía Conector)
 
-Para conectar **Claude Desktop** en la computadora de un director o gerente:
+Para conectar **Claude** en la computadora de un director o gerente de manera directa y visual:
 
-1. Abre la aplicación de Claude en tu PC o Mac.
-2. Ve a **Configuración** (`Settings`) > **Developer** > Haz clic en **Edit Config** (abre el archivo `claude_desktop_config.json`).
-3. Agrega la siguiente configuración:
+1. Abre la aplicación de **Claude**.
+2. Ve a **Configuración** (`Settings`) > pestaña **Conectores** (o `Developer` / `Connectors`).
+3. Haz clic en **"Agregar nuevo conector"** (o *Add Server / Add Connector*).
+4. Completa los 3 campos solicitados:
+   * **Nombre:** `NutriAnalytics`
+   * **URL / Ruta:** `https://nutrianalytics.onrender.com/mcp/agro`
+   * **API Key:** Ingresa la clave de autorización (Bearer Token) proporcionada para Nutrifertil.
+5. Haz clic en **"Agregar" / "Conectar"**.
 
-```json
-{
-  "mcpServers": {
-    "nutrianalytics": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote@latest",
-        "https://nutrianalytics.onrender.com/mcp/agro",
-        "--header",
-        "Authorization: Bearer TU_MCP_API_KEY_AQUI"
-      ]
-    }
-  }
-}
-```
-*(Nota: También puede ejecutarse localmente apuntando a `php artisan mcp:start agro` si se corre en la misma máquina).*
-
-4. Reinicia Claude Desktop. Verás un icono de herramientas en la esquina inferior derecha.
+¡Listo! Aparecerá el indicador de herramientas activo en Claude, lo que le permitirá consultar en tiempo real ventas, existencias de inventario y saldos de cartera directamente en el chat.
 
 ---
 
-### 4.4 Configuración en ChatGPT Plus (Custom GPTs / Actions) o Lovable
+### 4.4 Configuración en ChatGPT Plus (Custom GPTs / Actions)
 
-1. En ChatGPT, crea o edita un **Custom GPT** corporativo (ej. *"Asesor Comercial Nutrifertil"*).
-2. En la pestaña **Configure**, agrega una nueva **Action**.
-3. Ingresa la URL base: `https://nutrianalytics.onrender.com/mcp/agro`.
-4. En el tipo de autenticación, selecciona **API Key (Bearer)** e introduce la clave asignada.
+Para directores que utilicen **ChatGPT**:
+
+1. En ChatGPT, crea o edita tu **Custom GPT** corporativo (ej. *"Asistente Ejecutivo Nutrifertil"*).
+2. En la pestaña **Configure**, dirígete a **Actions** y selecciona **"Create new action"**.
+3. En la URL del servidor / OpenAPI, ingresa: `https://nutrianalytics.onrender.com/mcp/agro`.
+4. En **Authentication**, selecciona **API Key (Bearer)** y coloca el token asignado.
+5. Guarda los cambios.
 
 ---
 
