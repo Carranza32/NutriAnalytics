@@ -67,9 +67,6 @@ El sistema cuenta con las vistas analíticas curadas correspondientes a las áre
 * **Cuentas por Cobrar (`movcxc`, `clientes`):** Antigüedad de saldos (aging), vencimientos de cartera, clientes en mora y riesgo de abandono comercial (churn).
 * **Estructura Comercial (`sucursales`, `vendedores`):** Agencias físicas y asignación de cartera por asesor comercial.
 
-> [!NOTE]
-> Conforme a la Sección 2.2 de la propuesta original, el catálogo documentado comprende las áreas comerciales y operativas acordadas (Ventas, Cartera CxC e Inventario). El módulo de Cuentas por Pagar (CxP / Proveedores) no fue incorporado en esta fase inicial ya que dichas tablas no fueron replicadas en la fase de sincronización local, quedando la arquitectura preparada para recibirlo en futuras ampliaciones.
-
 ---
 
 ## 3. Manual de Usuario: Portal Ejecutivo Web
@@ -201,7 +198,7 @@ Una vez conectado, cualquier usuario autorizado puede interactuar en lenguaje na
 
 1. **Monitoreo de la Sincronización Local:** Asegurarse de que el servicio o tarea programada que replica los datos de SQL Server hacia Supabase se mantenga en ejecución periódica (por ejemplo, cada 30 o 60 minutos) para que el portal refleje la información al día.
 2. **Respaldo de Credenciales:** Mantener las API Keys del servidor MCP en un lugar seguro y renovarlas periódicamente desde la configuración si un directivo cambia de dispositivo.
-3. **Escalabilidad Futura:** Si Nutrifertil decide más adelante incorporar el módulo de Cuentas por Pagar (CxP), el equipo técnico del ERP solo debe incluir las tablas `movcxp` / `proveedores` en la rutina de réplica hacia Supabase, y NutriAnalytics podrá visualizarlas de inmediato sin rehacer la arquitectura.
+3. **Escalabilidad y Nuevos Requerimientos:** La arquitectura modular del sistema permite incorporar con agilidad nuevas vistas, catálogos o consultas a medida que el negocio lo requiera, integrándolos de forma transparente tanto en el portal web como en el servidor de inteligencia artificial.
 
 ---
 
